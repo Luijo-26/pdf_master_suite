@@ -1,0 +1,20 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Compilados de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Carpetas de PyInstaller
+build/
+dist/
+*.spec
+
+# Logs y pruebas
+*.log
+scratch/
+
