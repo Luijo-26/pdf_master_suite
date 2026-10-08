@@ -164,6 +164,11 @@ class DropZone(QFrame):
 
     # Eventos nativos de arrastrar y soltar
     def dragEnterEvent(self, event: QDragEnterEvent):
+        # Ignorar arrastre interno de reordenación de filas o páginas
+        if event.mimeData().hasFormat("application/x-file-row-index") or event.mimeData().hasFormat("application/x-pdf-page-card"):
+            event.ignore()
+            return
+
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
             self._drag_hover = True

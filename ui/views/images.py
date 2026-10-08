@@ -49,10 +49,22 @@ class ImagesView(BaseToolView):
             allowed_extensions=IMG_EXTS,
             file_filter=IMG_FILTER,
             add_button_text="+ Agregar imágenes",
+            extra_info_provider=self._get_image_info,
             parent=self,
         )
         self.file_list.files_changed.connect(self._on_list_changed)
         self.content_layout.addWidget(self.file_list, 1)
+
+    def _get_image_info(self, path: str) -> str:
+        try:
+            from PySide6.QtGui import QImageReader
+            reader = QImageReader(path)
+            sz = reader.size()
+            if sz.isValid():
+                return f"{sz.width()}×{sz.height()} px"
+        except Exception:
+            pass
+        return ""
 
     def add_initial_files(self, files: List[str]):
         img_files = [f for f in files if any(f.lower().endswith(ext) for ext in IMG_EXTS)]
