@@ -1,20 +1,78 @@
-# Entornos virtuales
-venv/
-env/
-.env
-
-# Compilados de Python
+# =============================================================================
+# Python & Bytecode
+# =============================================================================
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.so
 *.pyd
 
-# Carpetas de PyInstaller
+# =============================================================================
+# Entornos virtuales (Virtual Environments)
+# =============================================================================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.env
+
+# =============================================================================
+# Compilación, Empaquetado y Distribución (PyInstaller / PySide6 / Wheel)
+# =============================================================================
 build/
 dist/
 *.spec
+*.manifest
+*.egg-info/
+*.egg
 
-# Logs y pruebas
+# =============================================================================
+# Logs, Temporales y Depuración
+# =============================================================================
 *.log
 scratch/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
 
+# =============================================================================
+# IDEs y Editores de código
+# =============================================================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.user
+*.useros
+*.sln.docstates
+
+# =============================================================================
+# Archivos del Sistema Operativo
+# =============================================================================
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# =============================================================================
+# Documentos de prueba o salida temporal generados localmente
+# =============================================================================
+*.pdf_test
+output/
+downloads/
