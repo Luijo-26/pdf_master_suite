@@ -7,14 +7,17 @@ el sistema de notificaciones flotantes (ToastManager) y atajos de teclado global
 
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QTimer
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 )
 
+from core.updater import ReleaseInfo, UpdateCheckThread
+from core.version import APP_VERSION
 from ui.components.sidebar import Sidebar
 from ui.components.toast import ToastManager
+from ui.components.update_dialog import UpdateDialog
 from ui.icons import icon, logo_pixmap
 from ui.theme import C
 from ui.views.compress import CompressView
@@ -50,6 +53,7 @@ class MainWindow(QMainWindow):
         # 1. Menú lateral (Sidebar)
         self.sidebar = Sidebar(self)
         self.sidebar.navigate_requested.connect(self.navigate_to)
+        self.sidebar.check_updates_requested.connect(self.check_for_updates_manual)
         root_layout.addWidget(self.sidebar)
 
         # 2. Contenedor de vistas apiladas
@@ -59,15 +63,21 @@ class MainWindow(QMainWindow):
         # 3. Administrador de Toasts
         self.toast_mgr = ToastManager(self)
 
-        # 4. Instanciar vistas
+        # 4. Hilo de comprobación de actualizaciones
+        self._update_checker_thread: Optional[UpdateCheckThread] = None
+
+        # 5. Instanciar vistas
         self.views: Dict[str, QWidget] = {}
         self._init_views()
 
-        # 5. Atajos de teclado globales
+        # 6. Atajos de teclado globales
         self._init_shortcuts()
 
         # Vista inicial: Home
         self.navigate_to("home")
+
+        # 7. Verificación silenciosa en segundo plano diferida (2.5 segundos)
+        QTimer.singleShot(2500, self.check_for_updates_auto)
 
     def _init_views(self):
         # Home
@@ -198,3 +208,76 @@ class MainWindow(QMainWindow):
                 self.navigate_to_with_files("organize", files)
         else:
             self.navigate_to_with_files("merge", files)
+
+    # =========================================================================
+    # SISTEMA DE ACTUALIZACIÓN
+    # =========================================================================
+    def check_for_updates_auto(self):
+        """Verificación silenciosa en segundo plano al arrancar la app."""
+        if self._update_checker_thread and self._update_checker_thread.isRunning():
+            return
+
+        self._update_checker_thread = UpdateCheckThread(force_check=False, parent=self)
+        self._update_checker_thread.check_finished.connect(self._on_update_check_auto_finished)
+        self._update_checker_thread.start()
+
+    def _on_update_check_auto_finished(self, release_info: Optional[ReleaseInfo], has_update: bool):
+        if has_update and release_info:
+            dialog = UpdateDialog(release_info, parent=self)
+            dialog.exec()
+
+    def check_for_updates_manual(self):
+        """Verificación manual accionada por el usuario desde el menú lateral."""
+        if self._update_checker_thread and self._update_checker_thread.isRunning():
+            self.toast_mgr.show_toast(
+                message="Verificando servidores de GitHub...",
+                title="Comprobando actualizaciones",
+                toast_type="info",
+            )
+            return
+
+        self.toast_mgr.show_toast(
+            message="Conectando con el servidor de versiones...",
+            title="Buscando actualizaciones",
+            toast_type="info",
+            duration_ms=3000,
+        )
+
+        self._update_checker_thread = UpdateCheckThread(force_check=True, parent=self)
+        self._update_checker_thread.check_finished.connect(self._on_update_check_manual_finished)
+        self._update_checker_thread.check_failed.connect(self._on_update_check_manual_failed)
+        self._update_checker_thread.start()
+
+    def _on_update_check_manual_finished(self, release_info: Optional[ReleaseInfo], has_update: bool):
+        if has_update and release_info:
+            dialog = UpdateDialog(release_info, parent=self)
+            dialog.exec()
+        elif release_info:
+            self.toast_mgr.show_toast(
+                message=f"Tienes instalada la versión más reciente (v{APP_VERSION}).",
+                title="PDF Master Suite está al día",
+                toast_type="success",
+                duration_ms=4500,
+            )
+        else:
+            self.toast_mgr.show_toast(
+                message="No se pudo obtener información del servidor. Revisa tu conexión.",
+                title="Sin conexión de red",
+                toast_type="warning",
+                duration_ms=4500,
+            )
+
+    def _on_update_check_manual_failed(self, error_msg: str):
+        self.toast_mgr.show_toast(
+            message="Ocurrió un error al contactar con GitHub Releases.",
+            title="Error de comprobación",
+            toast_type="error",
+            duration_ms=4500,
+        )
+
+    def closeEvent(self, event):
+        if self._update_checker_thread and self._update_checker_thread.isRunning():
+            self._update_checker_thread.quit()
+            self._update_checker_thread.wait(1000)
+        super().closeEvent(event)
+

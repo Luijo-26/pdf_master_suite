@@ -7,12 +7,13 @@ iconos vectoriales temáticos y píldoras de selección activa.
 from typing import Dict, Optional
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QCursor, QIcon
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QVBoxLayout, QWidget
 )
 
+from core.version import APP_VERSION
 from ui.icons import icon, logo_pixmap, pixmap
 from ui.theme import C, TOOLS, ToolMeta, font, rgba
 
@@ -89,6 +90,7 @@ class NavButton(QPushButton):
 
 class Sidebar(QFrame):
     navigate_requested = Signal(str)
+    check_updates_requested = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -186,6 +188,27 @@ class Sidebar(QFrame):
         info_lbl.setFont(font(8, 400))
         info_lbl.setStyleSheet(f"color: {C.TEXT_3};")
         f_layout.addWidget(info_lbl)
+
+        # Fila de versión y comprobación de actualización
+        ver_row = QHBoxLayout()
+        ver_row.setContentsMargins(0, 4, 0, 0)
+        ver_row.setSpacing(6)
+
+        v_badge = QLabel(f"v{APP_VERSION}")
+        v_badge.setFont(font(8, 600))
+        v_badge.setStyleSheet(f"color: {C.TEXT_3};")
+        ver_row.addWidget(v_badge)
+
+        btn_update_check = QPushButton("Buscar cambios")
+        btn_update_check.setObjectName("link")
+        btn_update_check.setFont(font(8, 500))
+        btn_update_check.setCursor(Qt.PointingHandCursor)
+        btn_update_check.setIcon(QIcon(pixmap("refresh", 11, C.TEXT_3)))
+        btn_update_check.setToolTip("Comprobar si existe una versión más reciente")
+        btn_update_check.clicked.connect(self.check_updates_requested.emit)
+        ver_row.addWidget(btn_update_check, 0, Qt.AlignRight)
+
+        f_layout.addLayout(ver_row)
 
         main_layout.addWidget(footer)
 

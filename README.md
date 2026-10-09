@@ -12,6 +12,7 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 - **Miniaturas reales de páginas (QtPdf):** En *Organizar y Rotar páginas*, visualiza cada página como una miniatura nítida con rotación en tiempo real (+90°, -90°, 180°), eliminación y selección múltiple.
 - **Control total de guardado (Guardar como...):** Diálogos nativos para elegir siempre la carpeta de destino y el nombre final con sugerencias inteligentes.
 - **Notificaciones no bloqueantes (Toasts):** Mensajes emergentes con accesos directos a "Abrir archivo" y "Mostrar en carpeta" en el Explorador de Windows.
+- **Auto-actualización directa y notificaciones (GitHub Releases):** Detección automática en segundo plano de nuevas versiones, ventana emergente modal con changelog interactivo, descarga asistida con barra de progreso y sustitución en caliente (hot-swap) para el ejecutable de Windows.
 - **Dashboard de inicio:** Pantalla principal interactiva con tarjetas de acceso rápido, soltado universal que detecta el formato y lista de documentos recientes.
 - **Procesamiento multihilo (QThreadPool):** Tareas pesadas ejecutadas en segundo plano con indicadores de progreso reactivos.
 
@@ -77,6 +78,9 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 ├── pdf_tools.py             # Lógica pura de manipulación de archivos (sin GUI)
 ├── requirements.txt         # Dependencias (PySide6, pypdf, Pillow, docx2pdf, etc.)
 ├── build.bat                # Script de compilación a ejecutable (.exe)
+├── core/
+│   ├── version.py           # Metadatos de versión y parser semántico
+│   └── updater.py           # Comprobación de API GitHub, descarga y hot-swap Windows
 ├── ui/
 │   ├── app.py               # Ventana principal (QMainWindow, router y atajos)
 │   ├── theme.py             # Sistema de diseño, paleta oscura y QSS global
@@ -84,7 +88,8 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 │   ├── worker.py            # Ejecución en segundo plano con QThreadPool
 │   ├── recents.py           # Gestor de historial de archivos recientes
 │   ├── components/
-│   │   ├── sidebar.py       # Menú lateral categorizado
+│   │   ├── sidebar.py       # Menú lateral categorizado con verificador
+│   │   ├── update_dialog.py # Diálogo modal emergente de actualización
 │   │   ├── drop_zone.py     # Zona de arrastrar y soltar nativa
 │   │   ├── file_list.py     # Lista de archivos interactiva reordenable
 │   │   ├── page_grid.py     # Cuadrícula de miniaturas reales (QtPdf)
