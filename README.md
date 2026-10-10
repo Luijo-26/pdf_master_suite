@@ -4,6 +4,14 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 
 ---
 
+## Novedades de la Versión 2.3.0
+
+- **Visor de PDF Integrado de Alta Fidelidad (`QPdfView`):** Inspecciona de inmediato el resultado final de cualquier operación (unir, comprimir, marca de agua, etc.) sin abrir Acrobat ni navegadores. Incluye controles de zoom, ajuste al ancho/página, rotación y navegación fluida.
+- **Motor Multitema y Personalización Completa:** Elige entre 5 temas diseñados a medida (*Oscuro Cyber*, *Negro OLED*, *Azul Espacial*, *Verde Esmeralda* y *Claro Nórdico*) con cambio en caliente (*hot-reload*) y selección de acentos de color.
+- **Panel de Configuración:** Guarda tus preferencias de visor, temas y actualizaciones en tiempo real.
+
+---
+
 ## Características y Rediseño
 
 - **Arquitectura fluida con Qt (PySide6):** Renderizado acelerado, micro-animaciones suaves, sin parpadeos de lista ni bloqueos de ventana.
@@ -142,7 +150,9 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 │       ├── pdf_to_images.py # Vista PDF a Imágenes
 │       ├── pdf_to_word.py   # Vista PDF a Word
 │       ├── pdf_to_text.py   # Vista PDF a Texto
-│       └── security.py      # Vista Seguridad de PDF
+│       ├── pdf_viewer.py    # Visor integrado de PDF (QPdfView)
+│       ├── security.py      # Vista Seguridad de PDF
+│       └── settings.py      # Vista de Configuración y selector de temas
 └── README.md
 ```
 

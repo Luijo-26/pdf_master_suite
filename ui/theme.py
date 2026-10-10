@@ -1,39 +1,189 @@
 """
 ui/theme.py
-Sistema de diseño de PDF Master Suite: paleta oscura, metadatos de herramientas,
-hoja de estilos global (QSS) y utilidades de color.
+Sistema de diseño de PDF Master Suite: paletas de color, temas dinámicos,
+metadatos de herramientas, hoja de estilos global (QSS) y utilidades de color.
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import Callable, Dict, List, Optional, Tuple
 
-from PySide6.QtGui import QColor, QPalette, QFont
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication, QWidget
 
+from core.settings import get_setting
+from ui.icons import clear_icon_cache
+
 
 # -----------------------------------------------------------------------------
-# PALETA
+# PALETAS DE TEMAS
+# -----------------------------------------------------------------------------
+@dataclass(frozen=True)
+class ThemeDefinition:
+    key: str
+    name: str
+    description: str
+    is_dark: bool
+    bg: str
+    sidebar: str
+    surface: str
+    card: str
+    card_hover: str
+    input: str
+    border: str
+    border_strong: str
+    text: str
+    text_2: str
+    text_3: str
+    accent: str
+    accent_2: str
+    accent_soft: str
+    success: str = "#22C55E"
+    warning: str = "#F5A524"
+    danger: str = "#F0506E"
+    info: str = "#38BDF8"
+
+
+THEMES: Dict[str, ThemeDefinition] = {
+    "dark": ThemeDefinition(
+        key="dark",
+        name="Oscuro Cyber",
+        description="Fondo oscuro equilibrado con alto contraste y acentos violeta.",
+        is_dark=True,
+        bg="#0E0F14",
+        sidebar="#111218",
+        surface="#16181F",
+        card="#1C1E27",
+        card_hover="#232632",
+        input="#12131A",
+        border="#262935",
+        border_strong="#353948",
+        text="#E8E9EF",
+        text_2="#A0A6B5",
+        text_3="#666C7C",
+        accent="#7C6CFF",
+        accent_2="#A855F7",
+        accent_soft="#B4AAFF",
+    ),
+    "oled": ThemeDefinition(
+        key="oled",
+        name="Negro OLED",
+        description="Negro absoluto y máximo contraste, ideal para pantallas OLED.",
+        is_dark=True,
+        bg="#000000",
+        sidebar="#08080A",
+        surface="#101014",
+        card="#16161B",
+        card_hover="#202026",
+        input="#0D0D10",
+        border="#22222A",
+        border_strong="#33333F",
+        text="#FFFFFF",
+        text_2="#A8ACB9",
+        text_3="#6B7082",
+        accent="#8B5CF6",
+        accent_2="#C084FC",
+        accent_soft="#DDD6FE",
+    ),
+    "navy": ThemeDefinition(
+        key="navy",
+        name="Azul Espacial",
+        description="Elegante paleta azul medianoche profesional y descansada.",
+        is_dark=True,
+        bg="#0A0F1D",
+        sidebar="#0D1426",
+        surface="#111A30",
+        card="#17223F",
+        card_hover="#1E2C52",
+        input="#0F172C",
+        border="#22335C",
+        border_strong="#31477F",
+        text="#EDF2F7",
+        text_2="#94A3B8",
+        text_3="#64748B",
+        accent="#38BDF8",
+        accent_2="#6366F1",
+        accent_soft="#7DD3FC",
+    ),
+    "emerald": ThemeDefinition(
+        key="emerald",
+        name="Verde Esmeralda",
+        description="Tonos verdes bosque profundos y relajantes para largas sesiones.",
+        is_dark=True,
+        bg="#091410",
+        sidebar="#0C1B16",
+        surface="#10241E",
+        card="#152E27",
+        card_hover="#1C3D34",
+        input="#0D1E18",
+        border="#20453A",
+        border_strong="#2B5E4F",
+        text="#ECFDF5",
+        text_2="#A7F3D0",
+        text_3="#6EE7B7",
+        accent="#10B981",
+        accent_2="#059669",
+        accent_soft="#6EE7B7",
+    ),
+    "light": ThemeDefinition(
+        key="light",
+        name="Claro Nórdico",
+        description="Diseño limpio, luminoso y suave en tonos claros de alta legibilidad.",
+        is_dark=False,
+        bg="#F4F5F8",
+        sidebar="#EBEDF3",
+        surface="#FFFFFF",
+        card="#FFFFFF",
+        card_hover="#F1F3F9",
+        input="#F8FAFC",
+        border="#E2E8F0",
+        border_strong="#CBD5E1",
+        text="#0F172A",
+        text_2="#475569",
+        text_3="#94A3B8",
+        accent="#6366F1",
+        accent_2="#8B5CF6",
+        accent_soft="#4F46E5",
+    ),
+}
+
+ACCENTS: Dict[str, Tuple[str, str, str, str]] = {
+    # key: (primary, secondary, soft, label)
+    "indigo": ("#7C6CFF", "#A855F7", "#B4AAFF", "Índigo"),
+    "blue": ("#3B82F6", "#60A5FA", "#93C5FD", "Azul"),
+    "emerald": ("#10B981", "#059669", "#6EE7B7", "Esmeralda"),
+    "amber": ("#F59E0B", "#D97706", "#FCD34D", "Ámbar"),
+    "rose": ("#F43F5E", "#E11D48", "#FDA4AF", "Rosa"),
+}
+
+
+# -----------------------------------------------------------------------------
+# PALETA ACTIVA (Clase C con resolución dinámica de atributos)
 # -----------------------------------------------------------------------------
 class C:
-    BG = "#0E0F14"
-    SIDEBAR = "#111218"
-    SURFACE = "#16181F"
-    CARD = "#1C1E27"
-    CARD_HOVER = "#232632"
-    INPUT = "#12131A"
-    BORDER = "#262935"
-    BORDER_STRONG = "#353948"
-    TEXT = "#E8E9EF"
-    TEXT_2 = "#A0A6B5"
-    TEXT_3 = "#666C7C"
-    ACCENT = "#7C6CFF"
-    ACCENT_2 = "#A855F7"
-    ACCENT_SOFT = "#B4AAFF"
-    SUCCESS = "#22C55E"
-    WARNING = "#F5A524"
-    DANGER = "#F0506E"
-    INFO = "#38BDF8"
+    IS_DARK: bool = True
+    BG: str = "#0E0F14"
+    SIDEBAR: str = "#111218"
+    SURFACE: str = "#16181F"
+    CARD: str = "#1C1E27"
+    CARD_HOVER: str = "#232632"
+    INPUT: str = "#12131A"
+    BORDER: str = "#262935"
+    BORDER_STRONG: str = "#353948"
+    TEXT: str = "#E8E9EF"
+    TEXT_2: str = "#A0A6B5"
+    TEXT_3: str = "#666C7C"
+    ACCENT: str = "#7C6CFF"
+    ACCENT_2: str = "#A855F7"
+    ACCENT_SOFT: str = "#B4AAFF"
+    SUCCESS: str = "#22C55E"
+    WARNING: str = "#F5A524"
+    DANGER: str = "#F0506E"
+    INFO: str = "#38BDF8"
 
+
+CURRENT_THEME_KEY: str = "dark"
+CURRENT_ACCENT_KEY: str = "indigo"
+_theme_listeners: List[Callable[[], None]] = []
 
 FONT_FAMILY = "Segoe UI"
 
@@ -110,9 +260,10 @@ def rgba(value: str, alpha: float) -> str:
 
 def repolish(widget: QWidget) -> None:
     """Fuerza a Qt a reaplicar el QSS tras cambiar una propiedad dinámica."""
-    widget.style().unpolish(widget)
-    widget.style().polish(widget)
-    widget.update()
+    if widget and widget.style():
+        widget.style().unpolish(widget)
+        widget.style().polish(widget)
+        widget.update()
 
 
 def font(size: float = 10, weight: int = 400) -> QFont:
@@ -130,25 +281,44 @@ def format_bytes(num_bytes: int) -> str:
     return f"{num_bytes / (1024 * 1024):.2f} MB"
 
 
+def add_theme_listener(listener: Callable[[], None]) -> None:
+    """Registra un callback que se llamará cuando cambie el tema."""
+    if listener not in _theme_listeners:
+        _theme_listeners.append(listener)
+
+
+def remove_theme_listener(listener: Callable[[], None]) -> None:
+    if listener in _theme_listeners:
+        _theme_listeners.remove(listener)
+
+
 # -----------------------------------------------------------------------------
-# HOJA DE ESTILOS GLOBAL
+# HOJA DE ESTILOS GLOBAL (QSS)
 # -----------------------------------------------------------------------------
 def build_stylesheet() -> str:
+    btn_pressed_bg = "#E2E8F0" if not C.IS_DARK else "#2B2E3B"
+    btn_dis_bg = "#F1F5F9" if not C.IS_DARK else "#181A21"
+    btn_dis_border = "#E2E8F0" if not C.IS_DARK else "#20222B"
+    scrollbar_handle = "#CBD5E1" if not C.IS_DARK else "#2C2F3D"
+    scrollbar_handle_hover = "#94A3B8" if not C.IS_DARK else "#3D4154"
+    tooltip_bg = "#FFFFFF" if not C.IS_DARK else "#22242E"
+    menu_bg = "#FFFFFF" if not C.IS_DARK else "#1A1C24"
+
     return f"""
 * {{
     font-family: "{FONT_FAMILY}";
     color: {C.TEXT};
     outline: none;
 }}
-QMainWindow, QWidget#root, QWidget#view {{
+QMainWindow, QWidget#root, QWidget#view, QWidget#scrollContent {{
     background: {C.BG};
 }}
-QLabel {{ background: transparent; }}
-QLabel[role="title"] {{ font-size: 22px; font-weight: 600; }}
-QLabel[role="hero"] {{ font-size: 30px; font-weight: 700; }}
+QLabel {{ background: transparent; color: {C.TEXT}; }}
+QLabel[role="title"] {{ font-size: 22px; font-weight: 600; color: {C.TEXT}; }}
+QLabel[role="hero"] {{ font-size: 30px; font-weight: 700; color: {C.TEXT}; }}
 QLabel[role="subtitle"] {{ color: {C.TEXT_2}; font-size: 13px; }}
 QLabel[role="section"] {{ color: {C.TEXT_3}; font-size: 11px; font-weight: 700; letter-spacing: 1px; }}
-QLabel[role="h2"] {{ font-size: 16px; font-weight: 600; }}
+QLabel[role="h2"] {{ font-size: 16px; font-weight: 600; color: {C.TEXT}; }}
 QLabel[role="muted"] {{ color: {C.TEXT_2}; font-size: 13px; }}
 QLabel[role="hint"] {{ color: {C.TEXT_3}; font-size: 12px; }}
 QLabel[role="field"] {{ color: {C.TEXT_2}; font-size: 12px; font-weight: 600; }}
@@ -171,13 +341,13 @@ QFrame#card {{
     border-radius: 14px;
 }}
 QFrame#note {{
-    background: {rgba(C.INFO, 0.08)};
-    border: 1px solid {rgba(C.INFO, 0.25)};
+    background: {rgba(C.INFO, 0.12 if not C.IS_DARK else 0.08)};
+    border: 1px solid {rgba(C.INFO, 0.35 if not C.IS_DARK else 0.25)};
     border-radius: 12px;
 }}
 QFrame#warnnote {{
-    background: {rgba(C.WARNING, 0.08)};
-    border: 1px solid {rgba(C.WARNING, 0.28)};
+    background: {rgba(C.WARNING, 0.12 if not C.IS_DARK else 0.08)};
+    border: 1px solid {rgba(C.WARNING, 0.35 if not C.IS_DARK else 0.28)};
     border-radius: 12px;
 }}
 QFrame#actionbar {{
@@ -195,8 +365,8 @@ QPushButton {{
     color: {C.TEXT};
 }}
 QPushButton:hover {{ background: {C.CARD_HOVER}; border-color: {C.BORDER_STRONG}; }}
-QPushButton:pressed {{ background: #2B2E3B; }}
-QPushButton:disabled {{ color: {C.TEXT_3}; background: #181A21; border-color: #20222B; }}
+QPushButton:pressed {{ background: {btn_pressed_bg}; }}
+QPushButton:disabled {{ color: {C.TEXT_3}; background: {btn_dis_bg}; border-color: {btn_dis_border}; }}
 
 QPushButton#primary {{
     border: none;
@@ -207,31 +377,31 @@ QPushButton#primary {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {C.ACCENT}, stop:1 {C.ACCENT_2});
 }}
 QPushButton#primary:hover {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8D7FFF, stop:1 #B56CFA);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {C.ACCENT_2}, stop:1 {C.ACCENT});
 }}
 QPushButton#primary:pressed {{
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #6B5BEF, stop:1 #9645E6);
+    background: {C.ACCENT};
 }}
-QPushButton#primary:disabled {{ background: #262833; color: #6B7180; }}
+QPushButton#primary:disabled {{ background: {btn_dis_bg}; color: {C.TEXT_3}; }}
 
 QPushButton#accent {{
     border: none; color: white;
     background: {C.ACCENT};
     padding: 10px 20px;
 }}
-QPushButton#accent:hover {{ background: #8D7FFF; }}
+QPushButton#accent:hover {{ background: {C.ACCENT_2}; }}
 
 QPushButton#ghost {{
     background: transparent;
     border: 1px solid transparent;
     color: {C.TEXT_2};
 }}
-QPushButton#ghost:hover {{ background: rgba(255,255,255,0.06); color: {C.TEXT}; }}
+QPushButton#ghost:hover {{ background: {rgba(C.ACCENT, 0.10)}; color: {C.TEXT}; }}
 
 QPushButton#danger {{
     background: {rgba(C.DANGER, 0.10)};
     border: 1px solid {rgba(C.DANGER, 0.30)};
-    color: #FF8FA3;
+    color: {C.DANGER};
 }}
 QPushButton#danger:hover {{ background: {rgba(C.DANGER, 0.20)}; }}
 
@@ -252,7 +422,7 @@ QPushButton#link {{
     color: {C.ACCENT_SOFT};
     font-size: 12px;
 }}
-QPushButton#link:hover {{ color: white; text-decoration: underline; }}
+QPushButton#link:hover {{ color: {C.ACCENT}; text-decoration: underline; }}
 
 QPushButton#iconbtn {{
     background: transparent;
@@ -260,7 +430,7 @@ QPushButton#iconbtn {{
     border-radius: 8px;
     padding: 0px;
 }}
-QPushButton#iconbtn:hover {{ background: rgba(255,255,255,0.07); }}
+QPushButton#iconbtn:hover {{ background: {rgba(C.ACCENT, 0.12)}; }}
 
 QLineEdit {{
     background: {C.INPUT};
@@ -268,6 +438,7 @@ QLineEdit {{
     border-radius: 10px;
     padding: 10px 12px;
     font-size: 13px;
+    color: {C.TEXT};
     selection-background-color: {C.ACCENT};
 }}
 QLineEdit:hover {{ border-color: {C.BORDER_STRONG}; }}
@@ -286,15 +457,15 @@ QListView, QListWidget {{
 }}
 
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 4px 2px; }}
-QScrollBar::handle:vertical {{ background: #2C2F3D; border-radius: 3px; min-height: 36px; }}
-QScrollBar::handle:vertical:hover {{ background: #3D4154; }}
+QScrollBar::handle:vertical {{ background: {scrollbar_handle}; border-radius: 3px; min-height: 36px; }}
+QScrollBar::handle:vertical:hover {{ background: {scrollbar_handle_hover}; }}
 QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px 4px; }}
-QScrollBar::handle:horizontal {{ background: #2C2F3D; border-radius: 3px; min-width: 36px; }}
+QScrollBar::handle:horizontal {{ background: {scrollbar_handle}; border-radius: 3px; min-width: 36px; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0px; height: 0px; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
 
 QToolTip {{
-    background: #22242E;
+    background: {tooltip_bg};
     color: {C.TEXT};
     border: 1px solid {C.BORDER_STRONG};
     padding: 6px 9px;
@@ -302,7 +473,8 @@ QToolTip {{
     font-size: 12px;
 }}
 QMenu {{
-    background: #1A1C24;
+    background: {menu_bg};
+    color: {C.TEXT};
     border: 1px solid {C.BORDER_STRONG};
     border-radius: 12px;
     padding: 6px;
@@ -311,32 +483,97 @@ QMenu::item {{
     padding: 9px 22px 9px 12px;
     border-radius: 8px;
     font-size: 13px;
+    color: {C.TEXT};
 }}
-QMenu::item:selected {{ background: {rgba(C.ACCENT, 0.20)}; }}
+QMenu::item:selected {{ background: {rgba(C.ACCENT, 0.16)}; color: {C.TEXT}; }}
 QMenu::item:disabled {{ color: {C.TEXT_3}; }}
 QMenu::separator {{ height: 1px; background: {C.BORDER}; margin: 5px 8px; }}
 QMenu::icon {{ padding-left: 10px; }}
 """
 
 
-def apply_theme(app: QApplication) -> None:
-    app.setStyle("Fusion")
+# -----------------------------------------------------------------------------
+# APLICACIÓN DE TEMA
+# -----------------------------------------------------------------------------
+def apply_theme(
+    app: Optional[QApplication] = None,
+    theme_key: Optional[str] = None,
+    accent_key: Optional[str] = None,
+) -> None:
+    """
+    Aplica el tema y acento elegidos actualizando la paleta global C, la caché
+    de iconos, la hoja de estilos QSS y la QPalette de la aplicación Qt.
+    """
+    global CURRENT_THEME_KEY, CURRENT_ACCENT_KEY
 
-    pal = QPalette()
-    pal.setColor(QPalette.Window, QColor(C.BG))
-    pal.setColor(QPalette.WindowText, QColor(C.TEXT))
-    pal.setColor(QPalette.Base, QColor(C.INPUT))
-    pal.setColor(QPalette.AlternateBase, QColor(C.SURFACE))
-    pal.setColor(QPalette.Text, QColor(C.TEXT))
-    pal.setColor(QPalette.Button, QColor(C.CARD))
-    pal.setColor(QPalette.ButtonText, QColor(C.TEXT))
-    pal.setColor(QPalette.Highlight, QColor(C.ACCENT))
-    pal.setColor(QPalette.HighlightedText, QColor("#FFFFFF"))
-    pal.setColor(QPalette.ToolTipBase, QColor("#22242E"))
-    pal.setColor(QPalette.ToolTipText, QColor(C.TEXT))
-    pal.setColor(QPalette.PlaceholderText, QColor(C.TEXT_3))
-    pal.setColor(QPalette.Link, QColor(C.ACCENT_SOFT))
-    app.setPalette(pal)
+    if theme_key is None:
+        theme_key = get_setting("theme", "dark")
+    if accent_key is None:
+        accent_key = get_setting("accent", "indigo")
 
-    app.setFont(font(10))
-    app.setStyleSheet(build_stylesheet())
+    if theme_key not in THEMES:
+        theme_key = "dark"
+    if accent_key not in ACCENTS:
+        accent_key = "indigo"
+
+    CURRENT_THEME_KEY = theme_key
+    CURRENT_ACCENT_KEY = accent_key
+
+    th = THEMES[theme_key]
+    acc_primary, acc_secondary, acc_soft, _ = ACCENTS[accent_key]
+
+    # Actualizar atributos de C dinámicamente
+    C.IS_DARK = th.is_dark
+    C.BG = th.bg
+    C.SIDEBAR = th.sidebar
+    C.SURFACE = th.surface
+    C.CARD = th.card
+    C.CARD_HOVER = th.card_hover
+    C.INPUT = th.input
+    C.BORDER = th.border
+    C.BORDER_STRONG = th.border_strong
+    C.TEXT = th.text
+    C.TEXT_2 = th.text_2
+    C.TEXT_3 = th.text_3
+    C.ACCENT = acc_primary
+    C.ACCENT_2 = acc_secondary
+    C.ACCENT_SOFT = acc_soft
+    C.SUCCESS = th.success
+    C.WARNING = th.warning
+    C.DANGER = th.danger
+    C.INFO = th.info
+
+    # Limpiar caché de pixmaps para que los iconos se regeneren con los nuevos colores
+    clear_icon_cache()
+
+    if app is None:
+        app = QApplication.instance()
+
+    if app is not None:
+        app.setStyle("Fusion")
+
+        pal = QPalette()
+        pal.setColor(QPalette.Window, QColor(C.BG))
+        pal.setColor(QPalette.WindowText, QColor(C.TEXT))
+        pal.setColor(QPalette.Base, QColor(C.INPUT))
+        pal.setColor(QPalette.AlternateBase, QColor(C.SURFACE))
+        pal.setColor(QPalette.Text, QColor(C.TEXT))
+        pal.setColor(QPalette.Button, QColor(C.CARD))
+        pal.setColor(QPalette.ButtonText, QColor(C.TEXT))
+        pal.setColor(QPalette.Highlight, QColor(C.ACCENT))
+        pal.setColor(QPalette.HighlightedText, QColor("#FFFFFF"))
+        pal.setColor(QPalette.ToolTipBase, QColor("#FFFFFF" if not C.IS_DARK else "#22242E"))
+        pal.setColor(QPalette.ToolTipText, QColor(C.TEXT))
+        pal.setColor(QPalette.PlaceholderText, QColor(C.TEXT_3))
+        pal.setColor(QPalette.Link, QColor(C.ACCENT_SOFT))
+        app.setPalette(pal)
+
+        app.setFont(font(10))
+        app.setStyleSheet(build_stylesheet())
+
+    # Notificar a componentes que necesiten repintarse
+    for listener in list(_theme_listeners):
+        try:
+            listener()
+        except Exception:
+            pass

@@ -70,13 +70,13 @@ class BaseToolView(QWidget):
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
         title_lbl = QLabel(title)
+        title_lbl.setProperty("role", "title")
         title_lbl.setFont(font(16, 700))
-        title_lbl.setStyleSheet("color: white;")
         text_col.addWidget(title_lbl)
 
         sub_lbl = QLabel(subtitle)
+        sub_lbl.setProperty("role", "subtitle")
         sub_lbl.setFont(font(9.5, 400))
-        sub_lbl.setStyleSheet(f"color: {C.TEXT_2};")
         text_col.addWidget(sub_lbl)
         header.addLayout(text_col, 1)
 

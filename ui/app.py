@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 )
 
+from core.settings import get_setting
 from core.updater import ReleaseInfo, UpdateCheckThread
 from core.version import APP_VERSION
 from ui.components.sidebar import Sidebar
@@ -31,9 +32,11 @@ from ui.views.page_numbers import PageNumbersView
 from ui.views.pdf_to_images import PdfToImagesView
 from ui.views.pdf_to_text import PdfToTextView
 from ui.views.pdf_to_word import PdfToWordView
+from ui.views.pdf_viewer import PdfViewerView
 from ui.views.powerpoint import PowerpointView
 from ui.views.rotate_bulk import RotateBulkView
 from ui.views.security import SecurityView
+from ui.views.settings import SettingsView
 from ui.views.split import SplitView
 from ui.views.watermark import WatermarkView
 from ui.views.word import WordView
@@ -71,6 +74,11 @@ class MainWindow(QMainWindow):
 
         # 3. Administrador de Toasts
         self.toast_mgr = ToastManager(self)
+        self.toast_mgr.preview_requested.connect(self.open_in_viewer)
+
+        # Seguimiento de vistas para navegacion del visor
+        self._current_view_key: str = "home"
+        self._previous_view_key: str = "home"
 
         # 4. Hilo de comprobación de actualizaciones
         self._update_checker_thread: Optional[UpdateCheckThread] = None
@@ -148,6 +156,16 @@ class MainWindow(QMainWindow):
         self.security_view = SecurityView(self)
         self._add_tool_view("security", self.security_view)
 
+        # CONFIGURACIÓN
+        self.settings_view = SettingsView(self)
+        self._add_tool_view("settings", self.settings_view)
+
+        # VISOR DE PDF
+        self.home_view.preview_requested.connect(self.open_in_viewer)
+        self.pdf_viewer_view = PdfViewerView(self)
+        self.pdf_viewer_view.back_requested.connect(self._on_viewer_back)
+        self._add_tool_view("viewer", self.pdf_viewer_view)
+
     def _add_view(self, key: str, widget: QWidget):
         self.views[key] = widget
         self.stack.addWidget(widget)
@@ -164,10 +182,18 @@ class MainWindow(QMainWindow):
             toast_type=toast_type,
             file_path=file_path,
         )
+        # Apertura automática en el visor integrado si el usuario lo tiene habilitado
+        if toast_type == "success" and file_path and file_path.lower().endswith(".pdf"):
+            if get_setting("auto_open_viewer", True):
+                current_widget = self.stack.currentWidget()
+                tool_title = getattr(current_widget, "tool_title", "Herramienta")
+                self.open_in_viewer(file_path, source_tool_name=tool_title)
 
     def _init_shortcuts(self):
         shortcuts_map = {
             "Ctrl+H": "home",
+            "Ctrl+0": "viewer",
+            "Ctrl+,": "settings",
             "Ctrl+1": "merge",
             "Ctrl+2": "split",
             "Ctrl+3": "organize",
@@ -185,12 +211,28 @@ class MainWindow(QMainWindow):
         if key not in self.views:
             return
 
+        if self._current_view_key != "viewer":
+            self._previous_view_key = self._current_view_key
+        self._current_view_key = key
+
         target_widget = self.views[key]
         self.stack.setCurrentWidget(target_widget)
         self.sidebar.set_current(key)
 
         if key == "home":
             self.home_view.refresh_recents()
+
+    def open_in_viewer(self, file_path: str, source_tool_name: Optional[str] = None):
+        """Carga un documento en el visor de PDF integrado y cambia a la vista."""
+        if self._current_view_key != "viewer":
+            self._previous_view_key = self._current_view_key
+        self.pdf_viewer_view.load_pdf(file_path, source_tool_name=source_tool_name)
+        self.navigate_to("viewer")
+
+    def _on_viewer_back(self):
+        """Regresa a la vista desde donde se invocó el visor."""
+        target = self._previous_view_key if self._previous_view_key and self._previous_view_key != "viewer" else "home"
+        self.navigate_to(target)
 
     def navigate_to_with_files(self, key: str, files: List[str]):
         """Navega a una herramienta y le carga archivos iniciales."""
@@ -253,6 +295,9 @@ class MainWindow(QMainWindow):
     # =========================================================================
     def check_for_updates_auto(self):
         """Verificación silenciosa en segundo plano al arrancar la app."""
+        if not get_setting("check_updates_startup", True):
+            return
+
         if self._update_checker_thread and self._update_checker_thread.isRunning():
             return
 

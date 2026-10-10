@@ -45,6 +45,22 @@ class ReleaseInfo:
     html_url: str
 
 
+def is_installed_app() -> bool:
+    """
+    Determina si la aplicación se ejecuta instalada en el sistema
+    (mediante Inno Setup) o en modalidad portable (.exe único).
+    """
+    if not getattr(sys, "frozen", False):
+        return False
+    exe_dir = os.path.dirname(sys.executable)
+    # Inno Setup genera un desinstalador unins000.exe en la raíz de instalación
+    if os.path.exists(os.path.join(exe_dir, "unins000.exe")):
+        return True
+    if os.path.exists(os.path.join(exe_dir, ".installed")):
+        return True
+    return False
+
+
 def get_ignored_version() -> str:
     """Obtiene la versión omitida por el usuario si existe."""
     settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
@@ -91,19 +107,51 @@ def fetch_latest_release(timeout: int = 6) -> Optional[ReleaseInfo]:
     html_url = data.get("html_url") or GITHUB_RELEASES_PAGE
     published_at = data.get("published_at", "")
 
-    # Buscar el ejecutable de Windows (.exe) en los assets
+    # Buscar el ejecutable adecuado según la modalidad (Instalador vs Portable)
     download_url = ""
     asset_name = ""
     asset_size = 0
 
+    installed = is_installed_app()
     assets = data.get("assets", [])
+
+    candidates_setup = []
+    candidates_portable = []
+    candidates_other = []
+
     for asset in assets:
         name = asset.get("name", "")
         if name.lower().endswith(".exe"):
-            download_url = asset.get("browser_download_url", "")
-            asset_name = name
-            asset_size = asset.get("size", 0)
-            break
+            nl = name.lower()
+            if "setup" in nl or "installer" in nl:
+                candidates_setup.append(asset)
+            elif "portable" in nl:
+                candidates_portable.append(asset)
+            else:
+                candidates_other.append(asset)
+
+    target_asset = None
+    if installed:
+        # Si la app actual está instalada en el sistema, priorizar el Setup/Instalador
+        if candidates_setup:
+            target_asset = candidates_setup[0]
+        elif candidates_other:
+            target_asset = candidates_other[0]
+        elif candidates_portable:
+            target_asset = candidates_portable[0]
+    else:
+        # Si es la versión portable o modo desarrollo, priorizar el portable
+        if candidates_portable:
+            target_asset = candidates_portable[0]
+        elif candidates_other:
+            target_asset = candidates_other[0]
+        elif candidates_setup:
+            target_asset = candidates_setup[0]
+
+    if target_asset:
+        download_url = target_asset.get("browser_download_url", "")
+        asset_name = target_asset.get("name", "")
+        asset_size = target_asset.get("size", 0)
 
     # Si no hay asset .exe compilado, fallback a la URL del release en navegador
     if not download_url and assets:
@@ -243,7 +291,35 @@ def apply_update_and_restart(temp_exe_path: str, new_asset_name: str = "") -> Tu
     if not os.path.exists(temp_exe_path):
         return (False, "El archivo de actualización descargado no existe.")
 
-    # Generar script batch de relevo en %TEMP%
+    # 1. Si es la versión instalada o el paquete descargado es un instalador Setup:
+    is_setup_asset = "setup" in new_asset_name.lower() or "installer" in new_asset_name.lower()
+    if is_setup_asset or is_installed_app():
+        try:
+            # Inno Setup soporta actualización silenciosa desatendida:
+            # /SILENT muestra la barra de progreso sin requerir interacción
+            # /CLOSEAPPLICATIONS solicita el cierre de las aplicaciones abiertas
+            # /RESTARTAPPLICATIONS vuelve a abrir la app al finalizar
+            creation_flags = 0
+            if os.name == "nt":
+                creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+            subprocess.Popen(
+                [temp_exe_path, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"],
+                close_fds=True,
+            )
+
+            try:
+                QApplication.closeAllWindows()
+                QApplication.quit()
+            except Exception:
+                pass
+
+            os._exit(0)
+            return (True, "")
+        except Exception as e:
+            return (False, f"Error al ejecutar el instalador de actualización: {e}")
+
+    # 2. Si es la versión portable (.exe suelto), usar el script batch de relevo en caliente
     bat_path = os.path.join(tempfile.gettempdir(), f"pms_updater_{os.getpid()}.bat")
     current_pid = os.getpid()
 

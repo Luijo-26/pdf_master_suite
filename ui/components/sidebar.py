@@ -14,8 +14,10 @@ from PySide6.QtWidgets import (
 )
 
 from core.version import APP_VERSION
-from ui.icons import icon, logo_pixmap, pixmap
-from ui.theme import C, TOOLS, ToolMeta, font, rgba
+from ui.icons import logo_pixmap, pixmap
+from ui.theme import (
+    C, TOOLS, ToolMeta, add_theme_listener, font, remove_theme_listener, rgba
+)
 
 
 class NavButton(QPushButton):
@@ -60,14 +62,15 @@ class NavButton(QPushButton):
             self.update_state()
 
     def update_state(self):
+        self.pill.setStyleSheet(f"background: {self.accent_color}; border-radius: 2px;")
         if self._active:
             self.icon_lbl.setPixmap(pixmap(self.icon_name, 18, self.accent_color))
-            self.text_lbl.setStyleSheet(f"color: white; font-weight: 600;")
+            self.text_lbl.setStyleSheet(f"color: {C.TEXT}; font-weight: 700;")
             self.pill.show()
             self.setStyleSheet(f"""
                 NavButton {{
                     background: {rgba(self.accent_color, 0.16)};
-                    border: 1px solid {rgba(self.accent_color, 0.35)};
+                    border: 1px solid {rgba(self.accent_color, 0.40)};
                     border-radius: 10px;
                 }}
             """)
@@ -106,54 +109,46 @@ class Sidebar(QFrame):
         header.setSpacing(10)
         header.setContentsMargins(4, 0, 4, 10)
 
-        logo_lbl = QLabel()
-        logo_lbl.setPixmap(logo_pixmap(32))
-        logo_lbl.setFixedSize(32, 32)
-        header.addWidget(logo_lbl)
+        self.logo_lbl = QLabel()
+        self.logo_lbl.setPixmap(logo_pixmap(32))
+        self.logo_lbl.setFixedSize(32, 32)
+        header.addWidget(self.logo_lbl)
 
         title_col = QVBoxLayout()
         title_col.setSpacing(1)
-        app_title = QLabel("PDF Master")
-        app_title.setFont(font(12, 700))
-        app_title.setStyleSheet("color: white;")
-        title_col.addWidget(app_title)
+        self.app_title = QLabel("PDF Master")
+        self.app_title.setFont(font(12, 700))
+        self.app_title.setStyleSheet(f"color: {C.TEXT};")
+        title_col.addWidget(self.app_title)
 
-        app_sub = QLabel("Suite Local Privada")
-        app_sub.setFont(font(8.5, 400))
-        app_sub.setStyleSheet(f"color: {C.TEXT_3};")
-        title_col.addWidget(app_sub)
+        self.app_sub = QLabel("Suite Local Privada")
+        self.app_sub.setFont(font(8.5, 400))
+        self.app_sub.setStyleSheet(f"color: {C.TEXT_3};")
+        title_col.addWidget(self.app_sub)
 
         header.addLayout(title_col, 1)
         main_layout.addLayout(header)
 
         # 2. Caja de búsqueda rápida de herramientas
-        search_box = QFrame()
-        search_box.setStyleSheet(f"""
-            QFrame {{
-                background: {C.INPUT};
-                border: 1px solid {C.BORDER};
-                border-radius: 8px;
-            }}
-            QFrame:focus-within {{
-                border: 1px solid {C.ACCENT};
-            }}
-        """)
-        s_layout = QHBoxLayout(search_box)
+        self.search_box = QFrame()
+        self._update_search_box_style()
+
+        s_layout = QHBoxLayout(self.search_box)
         s_layout.setContentsMargins(8, 4, 8, 4)
         s_layout.setSpacing(6)
 
-        s_icon = QLabel()
-        s_icon.setPixmap(pixmap("search", 13, C.TEXT_3))
-        s_layout.addWidget(s_icon)
+        self.s_icon = QLabel()
+        self.s_icon.setPixmap(pixmap("search", 13, C.TEXT_3))
+        s_layout.addWidget(self.s_icon)
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Buscar herramienta...")
         self.search_input.setFont(font(9, 400))
-        self.search_input.setStyleSheet("border: none; background: transparent; color: white;")
+        self.search_input.setStyleSheet(f"border: none; background: transparent; color: {C.TEXT};")
         self.search_input.textChanged.connect(self._on_search_changed)
         s_layout.addWidget(self.search_input, 1)
 
-        main_layout.addWidget(search_box)
+        main_layout.addWidget(self.search_box)
 
         # 3. Área de scroll para botones de navegación
         scroll = QScrollArea()
@@ -176,6 +171,12 @@ class Sidebar(QFrame):
         c_layout.addWidget(self.btn_home)
         self.buttons["home"] = self.btn_home
 
+        # Botón Visor de PDF
+        self.btn_viewer = NavButton("viewer", "Visor de PDF", "eye", "#38BDF8", self)
+        self.btn_viewer.clicked.connect(lambda: self.navigate_requested.emit("viewer"))
+        c_layout.addWidget(self.btn_viewer)
+        self.buttons["viewer"] = self.btn_viewer
+
         # Secciones agrupadas
         category_order = [
             "ORGANIZAR",
@@ -193,8 +194,8 @@ class Sidebar(QFrame):
 
             lbl_group = QLabel(cat)
             lbl_group.setProperty("role", "section")
-            lbl_group.setFont(font(8, 700))
-            lbl_group.setContentsMargins(8, 12, 0, 4)
+            lbl_group.setFont(font(8.5, 700))
+            lbl_group.setStyleSheet(f"color: {C.TEXT_3}; padding: 10px 8px 3px 8px;")
             c_layout.addWidget(lbl_group)
 
             cat_buttons: List[Tuple[NavButton, ToolMeta]] = []
@@ -211,45 +212,89 @@ class Sidebar(QFrame):
         scroll.setWidget(container)
         main_layout.addWidget(scroll, 1)
 
-        # 3. Pie del Sidebar
-        footer = QFrame()
-        footer.setStyleSheet(f"border-top: 1px solid {C.BORDER}; padding-top: 8px;")
-        f_layout = QVBoxLayout(footer)
+        # 4. Botón de Configuración (anclado antes del pie)
+        self.btn_settings = NavButton("settings", "Configuración", "settings", C.ACCENT, self)
+        self.btn_settings.clicked.connect(lambda: self.navigate_requested.emit("settings"))
+        main_layout.addWidget(self.btn_settings)
+        self.buttons["settings"] = self.btn_settings
+
+        # 5. Pie del Sidebar
+        self.footer = QFrame()
+        self._update_footer_style()
+        f_layout = QVBoxLayout(self.footer)
         f_layout.setContentsMargins(4, 6, 4, 0)
         f_layout.setSpacing(2)
 
-        badge_lbl = QLabel("100% Offline y Seguro")
-        badge_lbl.setFont(font(8.5, 600))
-        badge_lbl.setStyleSheet(f"color: {C.SUCCESS};")
-        f_layout.addWidget(badge_lbl)
+        self.badge_lbl = QLabel("100% Offline y Seguro")
+        self.badge_lbl.setFont(font(8.5, 600))
+        self.badge_lbl.setStyleSheet(f"color: {C.SUCCESS};")
+        f_layout.addWidget(self.badge_lbl)
 
-        info_lbl = QLabel("Tus archivos nunca salen de tu PC")
-        info_lbl.setFont(font(8, 400))
-        info_lbl.setStyleSheet(f"color: {C.TEXT_3};")
-        f_layout.addWidget(info_lbl)
+        self.info_lbl = QLabel("Tus archivos nunca salen de tu PC")
+        self.info_lbl.setFont(font(8, 400))
+        self.info_lbl.setStyleSheet(f"color: {C.TEXT_3};")
+        f_layout.addWidget(self.info_lbl)
 
         # Fila de versión y comprobación de actualización
         ver_row = QHBoxLayout()
         ver_row.setContentsMargins(0, 4, 0, 0)
         ver_row.setSpacing(6)
 
-        v_badge = QLabel(f"v{APP_VERSION}")
-        v_badge.setFont(font(8, 600))
-        v_badge.setStyleSheet(f"color: {C.TEXT_3};")
-        ver_row.addWidget(v_badge)
+        self.v_badge = QLabel(f"v{APP_VERSION}")
+        self.v_badge.setFont(font(8, 600))
+        self.v_badge.setStyleSheet(f"color: {C.TEXT_3};")
+        ver_row.addWidget(self.v_badge)
 
-        btn_update_check = QPushButton("Buscar cambios")
-        btn_update_check.setObjectName("link")
-        btn_update_check.setFont(font(8, 500))
-        btn_update_check.setCursor(Qt.PointingHandCursor)
-        btn_update_check.setIcon(QIcon(pixmap("refresh", 11, C.TEXT_3)))
-        btn_update_check.setToolTip("Comprobar si existe una versión más reciente")
-        btn_update_check.clicked.connect(self.check_updates_requested.emit)
-        ver_row.addWidget(btn_update_check, 0, Qt.AlignRight)
+        self.btn_update_check = QPushButton("Buscar cambios")
+        self.btn_update_check.setObjectName("link")
+        self.btn_update_check.setFont(font(8, 500))
+        self.btn_update_check.setCursor(Qt.PointingHandCursor)
+        self.btn_update_check.setIcon(QIcon(pixmap("refresh", 11, C.TEXT_3)))
+        self.btn_update_check.setToolTip("Comprobar si existe una versión más reciente")
+        self.btn_update_check.clicked.connect(self.check_updates_requested.emit)
+        ver_row.addWidget(self.btn_update_check, 0, Qt.AlignRight)
 
         f_layout.addLayout(ver_row)
+        main_layout.addWidget(self.footer)
 
-        main_layout.addWidget(footer)
+        # Escuchar cambios dinámicos de tema
+        add_theme_listener(self._on_theme_changed)
+
+    def _update_search_box_style(self):
+        self.search_box.setStyleSheet(f"""
+            QFrame {{
+                background: {C.INPUT};
+                border: 1px solid {C.BORDER};
+                border-radius: 8px;
+            }}
+            QFrame:focus-within {{
+                border: 1px solid {C.ACCENT};
+            }}
+        """)
+
+    def _update_footer_style(self):
+        self.footer.setStyleSheet(f"border-top: 1px solid {C.BORDER}; padding-top: 8px;")
+
+    def _on_theme_changed(self):
+        """Reaplica colores cuando el tema o acento cambian."""
+        self.app_title.setStyleSheet(f"color: {C.TEXT};")
+        self.app_sub.setStyleSheet(f"color: {C.TEXT_3};")
+        self._update_search_box_style()
+        self.search_input.setStyleSheet(f"border: none; background: transparent; color: {C.TEXT};")
+        self.s_icon.setPixmap(pixmap("search", 13, C.TEXT_3))
+
+        self.btn_home.accent_color = C.ACCENT
+        self.btn_viewer.accent_color = C.INFO if C.IS_DARK else C.ACCENT
+        self.btn_settings.accent_color = C.ACCENT
+
+        for btn in self.buttons.values():
+            btn.update_state()
+
+        self._update_footer_style()
+        self.badge_lbl.setStyleSheet(f"color: {C.SUCCESS};")
+        self.info_lbl.setStyleSheet(f"color: {C.TEXT_3};")
+        self.v_badge.setStyleSheet(f"color: {C.TEXT_3};")
+        self.btn_update_check.setIcon(QIcon(pixmap("refresh", 11, C.TEXT_3)))
 
     def set_current(self, key: str):
         """Marca como activa la herramienta seleccionada y desmarca las demás."""
@@ -259,10 +304,18 @@ class Sidebar(QFrame):
     def _on_search_changed(self, text: str):
         """Filtra en tiempo real los botones y encabezados de categoría."""
         query = text.lower().strip()
-        
+
         # El botón Home solo se muestra si la búsqueda está vacía o coincide con 'inicio' / 'home'
         if "home" in self.buttons:
             self.buttons["home"].setVisible(not query or "inicio" in query or "home" in query)
+
+        # El botón Visor se muestra si la búsqueda está vacía o coincide con visor / pdf / ver / leer
+        if "viewer" in self.buttons:
+            self.buttons["viewer"].setVisible(not query or "visor" in query or "pdf" in query or "ver" in query or "leer" in query)
+
+        # El botón de Configuración solo se muestra si la búsqueda está vacía o coincide con 'config'
+        if "settings" in self.buttons:
+            self.buttons["settings"].setVisible(not query or "config" in query or "ajuste" in query or "tema" in query)
 
         for cat, (lbl_group, items) in self.group_items.items():
             visible_count = 0
@@ -279,3 +332,6 @@ class Sidebar(QFrame):
                     visible_count += 1
             lbl_group.setVisible(visible_count > 0)
 
+    def closeEvent(self, event):
+        remove_theme_listener(self._on_theme_changed)
+        super().closeEvent(event)

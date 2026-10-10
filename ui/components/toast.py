@@ -2,7 +2,7 @@
 ui/components/toast.py
 Notificaciones no bloqueantes superpuestas en la ventana principal.
 Aparecen en la esquina inferior derecha con animación suave, ofrecen accesos rápidos
-a "Abrir archivo" y "Mostrar en carpeta", y se desvanecen automáticamente.
+a "Ver resultado" (visor interno), "Abrir archivo" y "Mostrar en carpeta", y se desvanecen automáticamente.
 """
 
 from typing import Optional
@@ -24,6 +24,7 @@ from ui.theme import C, font, qcolor, rgba
 
 class Toast(QFrame):
     closed = Signal()
+    preview_requested = Signal(str)
 
     def __init__(
         self,
@@ -38,7 +39,7 @@ class Toast(QFrame):
         self.file_path = file_path
         self.setObjectName("toastCard")
         self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.setFixedWidth(380)
+        self.setFixedWidth(400)
 
         # Configuración por tipo
         palette_map = {
@@ -95,14 +96,24 @@ class Toast(QFrame):
             action_row = QHBoxLayout()
             action_row.setSpacing(8)
 
-            btn_open = QPushButton("Abrir archivo")
+            # Botón destacado: Ver resultado en el visor integrado (si es PDF)
+            if file_path.lower().endswith(".pdf"):
+                btn_preview = QPushButton(" Ver resultado")
+                btn_preview.setObjectName("chip")
+                btn_preview.setIcon(pixmap("eye", 13, C.ACCENT))
+                btn_preview.setStyleSheet(f"font-weight: 700; color: {C.ACCENT}; border-color: {rgba(C.ACCENT, 0.45)};")
+                btn_preview.setCursor(Qt.PointingHandCursor)
+                btn_preview.clicked.connect(lambda: [self.preview_requested.emit(file_path), self.dismiss()])
+                action_row.addWidget(btn_preview)
+
+            btn_open = QPushButton("Abrir")
             btn_open.setObjectName("chip")
             btn_open.setIcon(pixmap("external", 13, C.ACCENT_SOFT))
             btn_open.setCursor(Qt.PointingHandCursor)
             btn_open.clicked.connect(lambda: open_file(file_path))
             action_row.addWidget(btn_open)
 
-            btn_folder = QPushButton("Mostrar en carpeta")
+            btn_folder = QPushButton("Carpeta")
             btn_folder.setObjectName("chip")
             btn_folder.setIcon(pixmap("folder", 13, C.TEXT_2))
             btn_folder.setCursor(Qt.PointingHandCursor)
@@ -112,10 +123,10 @@ class Toast(QFrame):
             action_row.addStretch()
             main_layout.addLayout(action_row)
 
-        # Estilo de tarjeta flotante
+        # Estilo de tarjeta flotante adaptado al tema activo
         self.setStyleSheet(f"""
             QFrame#toastCard {{
-                background-color: #1A1C25;
+                background-color: {C.SURFACE};
                 border: 1px solid {rgba(color_hex, 0.45)};
                 border-left: 4px solid {color_hex};
                 border-radius: 12px;
@@ -156,8 +167,9 @@ class Toast(QFrame):
         self.close()
 
 
-class ToastManager(QObject := QWidget):
+class ToastManager(QWidget):
     """Administrador que posiciona los toasts en cascada sobre la ventana padre."""
+    preview_requested = Signal(str)
 
     def __init__(self, parent_window: QWidget):
         super().__init__(parent_window)
@@ -182,6 +194,7 @@ class ToastManager(QObject := QWidget):
             duration_ms=duration_ms,
         )
         toast.closed.connect(lambda: self._remove_toast(toast))
+        toast.preview_requested.connect(self.preview_requested.emit)
         self.toasts.append(toast)
         self.reposition_toasts()
         toast.show_animated()

@@ -1,7 +1,7 @@
 """
 ui/views/home.py
 Pantalla de inicio estilo dashboard.
-Ofrece acceso visual a las 7 herramientas con tarjetas interactivas,
+Ofrece acceso visual a las herramientas con tarjetas interactivas,
 zona inteligente de soltar archivo que detecta el formato y redirige,
 y panel de documentos recientes procesados localmente.
 """
@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
 from ui.components.drop_zone import DropZone
 from ui.icons import pixmap
 from ui.recents import get_recents, open_file, open_folder
-from ui.theme import C, TOOLS, ToolMeta, font, format_bytes, rgba
+from ui.theme import (
+    C, TOOLS, ToolMeta, add_theme_listener, font, format_bytes,
+    remove_theme_listener, rgba
+)
 
 
 class ToolCard(QFrame):
@@ -37,40 +40,49 @@ class ToolCard(QFrame):
         layout.setSpacing(16)
 
         # Icono con fondo temático suave
-        icon_box = QFrame()
-        icon_box.setFixedSize(50, 50)
-        icon_box.setStyleSheet(f"""
-            background: {rgba(tool.color, 0.16)};
-            border: 1px solid {rgba(tool.color, 0.35)};
-            border-radius: 14px;
-        """)
-        ib_layout = QVBoxLayout(icon_box)
+        self.icon_box = QFrame()
+        self.icon_box.setFixedSize(50, 50)
+        self._update_icon_box_style()
+
+        ib_layout = QVBoxLayout(self.icon_box)
         ib_layout.setContentsMargins(0, 0, 0, 0)
         ib_layout.setAlignment(Qt.AlignCenter)
-        ic_lbl = QLabel()
-        ic_lbl.setPixmap(pixmap(tool.icon, 26, tool.color))
-        ic_lbl.setAlignment(Qt.AlignCenter)
-        ib_layout.addWidget(ic_lbl)
-        layout.addWidget(icon_box)
+        self.ic_lbl = QLabel()
+        self.ic_lbl.setPixmap(pixmap(tool.icon, 26, tool.color))
+        self.ic_lbl.setAlignment(Qt.AlignCenter)
+        ib_layout.addWidget(self.ic_lbl)
+        layout.addWidget(self.icon_box)
 
         # Textos
         text_col = QVBoxLayout()
         text_col.setSpacing(4)
         text_col.setAlignment(Qt.AlignVCenter)
 
-        title_lbl = QLabel(tool.title)
-        title_lbl.setFont(font(11.5, 600))
-        title_lbl.setStyleSheet("color: white;")
-        text_col.addWidget(title_lbl)
+        self.title_lbl = QLabel(tool.title)
+        self.title_lbl.setFont(font(11.5, 600))
+        self.title_lbl.setStyleSheet(f"color: {C.TEXT};")
+        text_col.addWidget(self.title_lbl)
 
-        desc_lbl = QLabel(tool.description)
-        desc_lbl.setFont(font(9, 400))
-        desc_lbl.setStyleSheet(f"color: {C.TEXT_2};")
-        desc_lbl.setWordWrap(True)
-        text_col.addWidget(desc_lbl)
+        self.desc_lbl = QLabel(tool.description)
+        self.desc_lbl.setFont(font(9, 400))
+        self.desc_lbl.setStyleSheet(f"color: {C.TEXT_2};")
+        self.desc_lbl.setWordWrap(True)
+        text_col.addWidget(self.desc_lbl)
 
         layout.addLayout(text_col, 1)
+        self.update_card_style()
 
+    def _update_icon_box_style(self):
+        self.icon_box.setStyleSheet(f"""
+            background: {rgba(self.tool.color, 0.16)};
+            border: 1px solid {rgba(self.tool.color, 0.35)};
+            border-radius: 14px;
+        """)
+
+    def update_card_style(self):
+        self.title_lbl.setStyleSheet(f"color: {C.TEXT};")
+        self.desc_lbl.setStyleSheet(f"color: {C.TEXT_2};")
+        self._update_icon_box_style()
         self.setStyleSheet(f"""
             QFrame#homeToolCard {{
                 background-color: {C.CARD};
@@ -79,7 +91,7 @@ class ToolCard(QFrame):
             }}
             QFrame#homeToolCard:hover {{
                 background-color: {C.CARD_HOVER};
-                border: 1px solid {rgba(tool.color, 0.6)};
+                border: 1px solid {rgba(self.tool.color, 0.6)};
             }}
         """)
 
@@ -91,6 +103,7 @@ class ToolCard(QFrame):
 
 class RecentItemCard(QFrame):
     """Tarjeta individual para un documento reciente."""
+    preview_requested = Signal(str)
 
     def __init__(self, data: dict, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -104,28 +117,37 @@ class RecentItemCard(QFrame):
         layout.setSpacing(12)
 
         # Icono
-        icon_lbl = QLabel()
-        icon_lbl.setPixmap(pixmap("file", 18, C.ACCENT))
-        layout.addWidget(icon_lbl)
+        self.icon_lbl = QLabel()
+        self.icon_lbl.setPixmap(pixmap("file", 18, C.ACCENT))
+        layout.addWidget(self.icon_lbl)
 
         # Info
         info_col = QVBoxLayout()
         info_col.setSpacing(1)
         info_col.setAlignment(Qt.AlignVCenter)
 
-        name_lbl = QLabel(data.get("name", os.path.basename(file_path)))
-        name_lbl.setFont(font(9.5, 600))
-        name_lbl.setStyleSheet("color: white;")
-        info_col.addWidget(name_lbl)
+        self.name_lbl = QLabel(data.get("name", os.path.basename(file_path)))
+        self.name_lbl.setFont(font(9.5, 600))
+        self.name_lbl.setStyleSheet(f"color: {C.TEXT};")
+        info_col.addWidget(self.name_lbl)
 
         sub_parts = [data.get("tool", "PDF"), format_bytes(data.get("size", 0)), data.get("date", "")]
-        sub_lbl = QLabel("  •  ".join(p for p in sub_parts if p))
-        sub_lbl.setFont(font(8.5, 400))
-        sub_lbl.setStyleSheet(f"color: {C.TEXT_3};")
-        info_col.addWidget(sub_lbl)
+        self.sub_lbl = QLabel("  •  ".join(p for p in sub_parts if p))
+        self.sub_lbl.setFont(font(8.5, 400))
+        self.sub_lbl.setStyleSheet(f"color: {C.TEXT_3};")
+        info_col.addWidget(self.sub_lbl)
         layout.addLayout(info_col, 1)
 
         # Botones rápidos
+        if file_path.lower().endswith(".pdf"):
+            btn_prev = QPushButton("Ver")
+            btn_prev.setObjectName("chip")
+            btn_prev.setIcon(pixmap("eye", 12, C.ACCENT))
+            btn_prev.setStyleSheet(f"color: {C.ACCENT}; font-weight: 600;")
+            btn_prev.setCursor(Qt.PointingHandCursor)
+            btn_prev.clicked.connect(lambda: self.preview_requested.emit(file_path))
+            layout.addWidget(btn_prev)
+
         btn_open = QPushButton("Abrir")
         btn_open.setObjectName("chip")
         btn_open.setIcon(pixmap("external", 12, C.ACCENT_SOFT))
@@ -140,6 +162,12 @@ class RecentItemCard(QFrame):
         btn_folder.clicked.connect(lambda: open_folder(file_path))
         layout.addWidget(btn_folder)
 
+        self.update_style()
+
+    def update_style(self):
+        self.icon_lbl.setPixmap(pixmap("file", 18, C.ACCENT))
+        self.name_lbl.setStyleSheet(f"color: {C.TEXT};")
+        self.sub_lbl.setStyleSheet(f"color: {C.TEXT_3};")
         self.setStyleSheet(f"""
             QFrame#recentCard {{
                 background-color: {C.CARD};
@@ -155,18 +183,21 @@ class RecentItemCard(QFrame):
 
 class HomeView(QWidget):
     tool_requested = Signal(str, list)  # tool_key, initial_files
+    preview_requested = Signal(str)     # file_path para abrir en el visor
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self.cards: List[ToolCard] = []
         self._init_ui()
+        add_theme_listener(self._on_theme_changed)
 
     def _init_ui(self):
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet(f"QScrollArea {{ background: {C.BG}; border: none; }}")
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet(f"QScrollArea {{ background: {C.BG}; border: none; }}")
 
         container = QWidget()
         container.setObjectName("scrollContent")
@@ -178,15 +209,15 @@ class HomeView(QWidget):
         header_col = QVBoxLayout()
         header_col.setSpacing(6)
 
-        title_lbl = QLabel("¿Qué quieres hacer hoy?")
-        title_lbl.setFont(font(20, 700))
-        title_lbl.setStyleSheet("color: white;")
-        header_col.addWidget(title_lbl)
+        self.welcome_title = QLabel("¿Qué quieres hacer hoy?")
+        self.welcome_title.setFont(font(20, 700))
+        self.welcome_title.setStyleSheet(f"color: {C.TEXT};")
+        header_col.addWidget(self.welcome_title)
 
-        sub_lbl = QLabel("Selecciona una herramienta o suelta cualquier archivo aquí para comenzar de inmediato.")
-        sub_lbl.setFont(font(10, 400))
-        sub_lbl.setStyleSheet(f"color: {C.TEXT_2};")
-        header_col.addWidget(sub_lbl)
+        self.welcome_sub = QLabel("Selecciona una herramienta o suelta cualquier archivo aquí para comenzar de inmediato.")
+        self.welcome_sub.setFont(font(10, 400))
+        self.welcome_sub.setStyleSheet(f"color: {C.TEXT_2};")
+        header_col.addWidget(self.welcome_sub)
 
         c_layout.addLayout(header_col)
 
@@ -211,10 +242,11 @@ class HomeView(QWidget):
         grid = QGridLayout()
         grid.setSpacing(14)
 
-        # Agrupar herramientas en 2 columnas
+        self.cards = []
         for idx, tool in enumerate(TOOLS):
             card = ToolCard(tool, self)
             card.clicked.connect(lambda k=tool.key: self.tool_requested.emit(k, []))
+            self.cards.append(card)
             r = idx // 2
             c = idx % 2
             grid.addWidget(card, r, c)
@@ -230,8 +262,8 @@ class HomeView(QWidget):
         c_layout.addWidget(self.recent_box)
 
         c_layout.addStretch()
-        scroll.setWidget(container)
-        root_layout.addWidget(scroll)
+        self.scroll.setWidget(container)
+        root_layout.addWidget(self.scroll)
 
         self.refresh_recents()
 
@@ -254,9 +286,18 @@ class HomeView(QWidget):
         lbl_recent.setFont(font(9, 700))
         self.recent_layout.addWidget(lbl_recent)
 
-        # Mostrar hasta 4 recientes en el inicio
         for item in recents[:4]:
-            self.recent_layout.addWidget(RecentItemCard(item, self.recent_box))
+            card = RecentItemCard(item, self.recent_box)
+            card.preview_requested.connect(self.preview_requested.emit)
+            self.recent_layout.addWidget(card)
+
+    def _on_theme_changed(self):
+        self.welcome_title.setStyleSheet(f"color: {C.TEXT};")
+        self.welcome_sub.setStyleSheet(f"color: {C.TEXT_2};")
+        self.scroll.setStyleSheet(f"QScrollArea {{ background: {C.BG}; border: none; }}")
+        for card in self.cards:
+            card.update_card_style()
+        self.refresh_recents()
 
     def _on_files_dropped(self, files: List[str]):
         """Detecta inteligentemente la herramienta según el tipo de archivo."""
@@ -279,3 +320,7 @@ class HomeView(QWidget):
                 self.tool_requested.emit("organize", files)
         else:
             self.tool_requested.emit("merge", files)
+
+    def closeEvent(self, event):
+        remove_theme_listener(self._on_theme_changed)
+        super().closeEvent(event)

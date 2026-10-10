@@ -1,25 +1,55 @@
 @echo off
-chcp 65001 > nul
+setlocal enabledelayedexpansion
+
+:menu
+cls
 echo ========================================================
-echo   Compilando PDF Master Suite v2.2 a ejecutable (.exe)
+echo             PDF MASTER SUITE - CENTRO DE BUILD
 echo ========================================================
 echo.
-echo 1. Verificando dependencias...
-python -m pip install -r requirements.txt
+echo   Selecciona el tipo de version que deseas compilar:
 echo.
-echo 2. Compilando con PyInstaller...
-if exist build rd /s /q build > nul 2>&1
-python -m PyInstaller --onefile --noconsole --clean --hidden-import PySide6.QtPdf --hidden-import PySide6.QtSvg --hidden-import reportlab --hidden-import docx --hidden-import openpyxl --hidden-import win32com.client --name PDFMasterSuite_v2.2 main.py
+echo     [1] Version PORTABLE (.exe unico independiente)
+echo     [2] Version INSTALADOR (Setup para Windows con Inno Setup)
+echo     [3] AMBAS versiones (Preparar para GitHub Releases)
+echo     [4] Salir
 echo.
 echo ========================================================
-if %errorlevel% equ 0 (
-    echo   [EXITO] Ejecutable generado en dist\PDFMasterSuite_v2.2.exe
-    copy /Y dist\PDFMasterSuite_v2.2.exe dist\PDFMasterSuite.exe > nul
-    echo.
-    echo   Lanzando aplicacion...
-    start "" "dist\PDFMasterSuite_v2.2.exe"
-) else (
-    echo   [ERROR] Fallo la compilacion.
-)
+set /p OPCION="Elige una opcion (1-4): "
+
+if "%OPCION%"=="1" goto build_port
+if "%OPCION%"=="2" goto build_inst
+if "%OPCION%"=="3" goto build_both
+if "%OPCION%"=="4" goto fin
+
+echo.
+echo Opcion invalida. Intenta nuevamente.
+timeout /t 2 > nul
+goto menu
+
+:build_port
+call build_portable.bat
+goto fin
+
+:build_inst
+call build_installer.bat
+goto fin
+
+:build_both
+echo.
+echo ========================================================
+echo   Compilando AMBAS versiones para lanzamiento
+echo ========================================================
+echo.
+call build_portable.bat --nopause
+call build_installer.bat --nopause
+echo.
+echo ========================================================
+echo   [COMPLETO] Ambas versiones compiladas exitosamente:
+echo   - Portable:   dist\portable\PDFMasterSuite_Portable.exe
+echo   - Instalador: dist\installer\PDFMasterSuite_Setup.exe
 echo ========================================================
 pause
+goto fin
+
+:fin

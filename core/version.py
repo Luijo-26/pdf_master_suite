@@ -7,7 +7,7 @@ import re
 from typing import Tuple
 
 APP_NAME = "PDF Master Suite"
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 GITHUB_REPO = "Luijo-26/pdf_master_suite"
 GITHUB_API_LATEST = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 GITHUB_RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases"
