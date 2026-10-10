@@ -5,6 +5,9 @@ No contiene dependencias de interfaz gráfica (GUI), permitiendo pruebas automat
 """
 
 import os
+import io
+import math
+import gc
 from typing import List, Dict, Any, Optional, Tuple, Callable
 from pypdf import PdfReader, PdfWriter
 from PIL import Image, ImageOps
@@ -557,3 +560,647 @@ def convert_docx_batch(
         converted_files.append(out_target)
 
     return converted_files
+
+
+# -----------------------------------------------------------------------------
+# 8. CONVERTIR PDF A IMÁGENES (JPG / PNG)
+# -----------------------------------------------------------------------------
+def pdf_to_images(
+    pdf_path: str,
+    output_folder: str,
+    fmt: str = "png",
+    dpi: int = 150,
+    pages_range: Optional[List[int]] = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
+) -> List[str]:
+    """
+    Renderiza y extrae las páginas de un documento PDF como imágenes individuales (PNG o JPG).
+    Utiliza PySide6.QtPdf de forma 100% nativa y local.
+    
+    :param pdf_path: Ruta al archivo PDF de entrada.
+    :param output_folder: Carpeta destino para las imágenes extraídas.
+    :param fmt: 'png' o 'jpg'.
+    :param dpi: Densidad de píxeles (ej. 100, 150, 300).
+    :param pages_range: Lista de índices 0-indexados opcionales a exportar.
+    :param progress_callback: Callback para informar progreso (actual, total, nombre).
+    :return: Lista de rutas a las imágenes generadas.
+    """
+    if not os.path.exists(pdf_path):
+        raise PDFToolError(f"El archivo PDF no existe: {pdf_path}")
+        
+    try:
+        from PySide6.QtGui import QGuiApplication, QImage
+        from PySide6.QtCore import QSize
+        from PySide6.QtPdf import QPdfDocument
+        import sys
+        
+        # Asegurar instancia de QGuiApplication en hilos/procesos
+        _app = QGuiApplication.instance()
+        if _app is None:
+            _app = QGuiApplication(sys.argv)
+            
+        doc = QPdfDocument()
+        err = doc.load(pdf_path)
+        if err != QPdfDocument.Error.None_:
+            raise PDFToolError(f"No fue posible cargar el documento PDF (código: {err}).")
+            
+        total_pages = doc.pageCount()
+        if total_pages <= 0:
+            raise PDFToolError("El documento no contiene páginas legibles.")
+            
+        indices = pages_range if pages_range is not None else list(range(total_pages))
+        if not indices:
+            raise PDFToolError("No se especificaron páginas válidas para exportar.")
+            
+        os.makedirs(output_folder, exist_ok=True)
+        base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+        ext = "png" if fmt.lower() == "png" else "jpg"
+        save_format = "PNG" if ext == "png" else "JPEG"
+        digits = max(3, len(str(total_pages)))
+        
+        generated: List[str] = []
+        scale_factor = max(1.0, float(dpi) / 72.0)
+        
+        for step_idx, page_idx in enumerate(indices):
+            if page_idx < 0 or page_idx >= total_pages:
+                continue
+                
+            orig_size = doc.pagePointSize(page_idx)
+            w_px = max(10, int(orig_size.width() * scale_factor))
+            h_px = max(10, int(orig_size.height() * scale_factor))
+            
+            img: QImage = doc.render(page_idx, QSize(w_px, h_px))
+            if img.isNull():
+                continue
+                
+            out_filename = f"{base_name}_pag_{page_idx + 1:0{digits}d}.{ext}"
+            out_path = os.path.join(output_folder, out_filename)
+            
+            if save_format == "JPEG":
+                img.save(out_path, save_format, quality=92)
+            else:
+                img.save(out_path, save_format)
+                
+            generated.append(out_path)
+            
+            if progress_callback:
+                progress_callback(step_idx + 1, len(indices), out_filename)
+                
+        if not generated:
+            raise PDFToolError("No se generó ninguna imagen a partir del PDF.")
+            
+        return generated
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al convertir PDF a imágenes: {str(e)}")
+    finally:
+        if 'doc' in locals() and doc is not None:
+            doc.close()
+            del doc
+            gc.collect()
+
+
+# -----------------------------------------------------------------------------
+# 9. AÑADIR MARCA DE AGUA (WATERMARK: TEXTO O IMAGEN)
+# -----------------------------------------------------------------------------
+def add_watermark(
+    input_path: str,
+    output_path: str,
+    watermark_type: str = "text",
+    text: str = "CONFIDENCIAL",
+    image_path: Optional[str] = None,
+    opacity: float = 0.3,
+    angle: float = 45.0,
+    font_size: int = 40,
+    color_hex: str = "#888888",
+    position: str = "center",
+    scale: float = 0.5,
+) -> None:
+    """
+    Inserta una marca de agua (texto personalizado o imagen PNG/JPG) sobre cada página de un PDF.
+    Utiliza ReportLab y pypdf de manera 100% local.
+    """
+    if not os.path.exists(input_path):
+        raise PDFToolError(f"El archivo original no existe: {input_path}")
+        
+    if watermark_type == "text" and not text.strip():
+        raise PDFToolError("El texto de la marca de agua no puede estar vacío.")
+        
+    if watermark_type == "image":
+        if not image_path or not os.path.exists(image_path):
+            raise PDFToolError("Debes seleccionar una imagen válida para la marca de agua.")
+            
+    try:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.colors import HexColor
+        from reportlab.lib.utils import ImageReader
+        
+        reader = PdfReader(input_path)
+        if reader.is_encrypted:
+            raise PDFToolError("El documento está protegido con contraseña. Desprotégelo primero.")
+            
+        writer = PdfWriter()
+        alpha = max(0.05, min(1.0, float(opacity)))
+        
+        for page in reader.pages:
+            w = float(page.mediabox.width)
+            h = float(page.mediabox.height)
+            
+            wbuf = io.BytesIO()
+            c = canvas.Canvas(wbuf, pagesize=(w, h))
+            
+            # Posición base (x, y)
+            if position == "top_left":
+                x, y = w * 0.2, h * 0.82
+            elif position == "top_center":
+                x, y = w * 0.5, h * 0.82
+            elif position == "top_right":
+                x, y = w * 0.8, h * 0.82
+            elif position == "bottom_left":
+                x, y = w * 0.2, h * 0.18
+            elif position == "bottom_center":
+                x, y = w * 0.5, h * 0.18
+            elif position == "bottom_right":
+                x, y = w * 0.8, h * 0.18
+            else:  # center
+                x, y = w * 0.5, h * 0.5
+                
+            c.saveState()
+            
+            if watermark_type == "text":
+                c.translate(x, y)
+                c.rotate(angle)
+                c.setFillColor(HexColor(color_hex), alpha=alpha)
+                c.setFont("Helvetica-Bold", font_size)
+                c.drawCentredString(0, -font_size / 3.0, text)
+            else:
+                img_obj = Image.open(image_path)
+                img_w, img_h = img_obj.size
+                target_w = img_w * scale
+                target_h = img_h * scale
+                
+                # Centrar sobre (x, y)
+                c.translate(x, y)
+                c.rotate(angle)
+                c.setFillAlpha(alpha)
+                c.drawImage(
+                    image_path,
+                    -target_w / 2.0,
+                    -target_h / 2.0,
+                    width=target_w,
+                    height=target_h,
+                    mask="auto"
+                )
+                img_obj.close()
+                
+            c.restoreState()
+            c.save()
+            wbuf.seek(0)
+            
+            overlay_page = PdfReader(wbuf).pages[0]
+            page.merge_page(overlay_page)
+            writer.add_page(page)
+            
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        with open(output_path, "wb") as f_out:
+            writer.write(f_out)
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al aplicar la marca de agua: {str(e)}")
+
+
+# -----------------------------------------------------------------------------
+# 10. NUMERAR PÁGINAS (PAGE NUMBERS)
+# -----------------------------------------------------------------------------
+def add_page_numbers(
+    input_path: str,
+    output_path: str,
+    format_str: str = "Página {n} de {total}",
+    position: str = "bottom_center",
+    font_size: int = 10,
+    font_color: str = "#444444",
+    start_page_num: int = 1,
+    skip_first_pages: int = 0,
+    margin_pt: float = 36.0,
+) -> None:
+    """
+    Añade números de página personalizados a cada hoja del PDF.
+    
+    :param input_path: Ruta al archivo PDF.
+    :param output_path: Ruta de destino.
+    :param format_str: Cadena formateable con {n} y {total}.
+    :param position: 'bottom_center', 'bottom_right', 'bottom_left', 'top_center', 'top_right', 'top_left'.
+    :param font_size: Tamaño de fuente en puntos.
+    :param font_color: Color hexadecimal del texto.
+    :param start_page_num: Primer número a mostrar (ej. 1).
+    :param skip_first_pages: Cantidad de páginas iniciales a omitir sin numerar (ej. portada).
+    :param margin_pt: Margen de separación desde el borde en puntos (72 pt = 1 pulgada).
+    """
+    if not os.path.exists(input_path):
+        raise PDFToolError(f"El archivo original no existe: {input_path}")
+        
+    try:
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.colors import HexColor
+        
+        reader = PdfReader(input_path)
+        if reader.is_encrypted:
+            raise PDFToolError("El archivo está protegido con contraseña. Desprotégelo primero.")
+            
+        total_pages = len(reader.pages)
+        effective_total = max(1, total_pages - skip_first_pages)
+        writer = PdfWriter()
+        
+        for idx, page in enumerate(reader.pages):
+            if idx < skip_first_pages:
+                writer.add_page(page)
+                continue
+                
+            curr_num = start_page_num + (idx - skip_first_pages)
+            page_text = format_str.format(n=curr_num, total=effective_total)
+            
+            w = float(page.mediabox.width)
+            h = float(page.mediabox.height)
+            
+            nbuf = io.BytesIO()
+            c = canvas.Canvas(nbuf, pagesize=(w, h))
+            c.setFont("Helvetica", font_size)
+            c.setFillColor(HexColor(font_color))
+            
+            # Coordenadas
+            is_top = position.startswith("top")
+            is_right = position.endswith("right")
+            is_left = position.endswith("left")
+            
+            y = (h - margin_pt) if is_top else margin_pt
+            
+            if is_left:
+                x = margin_pt
+                c.drawString(x, y, page_text)
+            elif is_right:
+                x = w - margin_pt
+                c.drawRightString(x, y, page_text)
+            else:
+                x = w / 2.0
+                c.drawCentredString(x, y, page_text)
+                
+            c.save()
+            nbuf.seek(0)
+            
+            overlay_page = PdfReader(nbuf).pages[0]
+            page.merge_page(overlay_page)
+            writer.add_page(page)
+            
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        with open(output_path, "wb") as f_out:
+            writer.write(f_out)
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al añadir numeración de páginas: {str(e)}")
+
+
+# -----------------------------------------------------------------------------
+# 11. ROTAR PDF EN BLOQUE (BULK ROTATE)
+# -----------------------------------------------------------------------------
+def rotate_pdf_bulk(
+    input_path: str,
+    output_path: str,
+    rotation: int = 90,
+    page_filter: str = "all"
+) -> int:
+    """
+    Gira las páginas de un PDF en bloque según un filtro.
+    
+    :param input_path: Ruta al archivo PDF.
+    :param output_path: Ruta destino.
+    :param rotation: Grados a rotar (+90, -90, 180, 270).
+    :param page_filter: 'all', 'odd' (impares: 1, 3, 5...), 'even' (pares: 2, 4, 6...).
+    :return: Cantidad de páginas modificadas.
+    """
+    if not os.path.exists(input_path):
+        raise PDFToolError(f"El archivo no existe: {input_path}")
+        
+    try:
+        reader = PdfReader(input_path)
+        if reader.is_encrypted:
+            raise PDFToolError("El documento está protegido con contraseña. Desprotégelo primero.")
+            
+        writer = PdfWriter()
+        rot_norm = rotation % 360
+        changed_count = 0
+        
+        for idx, page in enumerate(reader.pages):
+            page_num = idx + 1
+            should_rotate = False
+            
+            if page_filter == "odd" and page_num % 2 != 0:
+                should_rotate = True
+            elif page_filter == "even" and page_num % 2 == 0:
+                should_rotate = True
+            elif page_filter == "all":
+                should_rotate = True
+                
+            if should_rotate and rot_norm != 0:
+                page.rotate(rot_norm)
+                changed_count += 1
+                
+            writer.add_page(page)
+            
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        with open(output_path, "wb") as f_out:
+            writer.write(f_out)
+            
+        return changed_count
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al rotar páginas en bloque: {str(e)}")
+
+
+# -----------------------------------------------------------------------------
+# 12. EXTRAER TEXTO PLANO (PDF A TXT)
+# -----------------------------------------------------------------------------
+def extract_text_from_pdf(
+    input_path: str,
+    output_path: str,
+    add_page_separator: bool = True
+) -> Dict[str, Any]:
+    """
+    Extrae todo el texto legible del PDF a un archivo .txt plano.
+    """
+    if not os.path.exists(input_path):
+        raise PDFToolError(f"El archivo no existe: {input_path}")
+        
+    try:
+        reader = PdfReader(input_path)
+        if reader.is_encrypted:
+            raise PDFToolError("El documento está protegido con contraseña. Desprotégelo primero.")
+            
+        total_pages = len(reader.pages)
+        all_text_chunks: List[str] = []
+        total_chars = 0
+        
+        for idx, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            total_chars += len(text)
+            
+            if add_page_separator:
+                all_text_chunks.append(f"--- PÁGINA {idx + 1} DE {total_pages} ---\n\n{text}\n\n")
+            else:
+                all_text_chunks.append(text + "\n\n")
+                
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        full_content = "".join(all_text_chunks)
+        with open(output_path, "w", encoding="utf-8") as f_out:
+            f_out.write(full_content)
+            
+        words = len(full_content.split())
+        return {
+            "page_count": total_pages,
+            "character_count": total_chars,
+            "word_count": words,
+            "output_path": output_path
+        }
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al extraer texto del PDF: {str(e)}")
+
+
+# -----------------------------------------------------------------------------
+# 13. RECORTAR PDF (CROP MARGINS)
+# -----------------------------------------------------------------------------
+def crop_pdf_margins(
+    input_path: str,
+    output_path: str,
+    left_pt: float = 0.0,
+    right_pt: float = 0.0,
+    top_pt: float = 0.0,
+    bottom_pt: float = 0.0
+) -> int:
+    """
+    Ajusta el cuadro de recorte (CropBox) de cada página de un PDF.
+    """
+    if not os.path.exists(input_path):
+        raise PDFToolError(f"El archivo original no existe: {input_path}")
+        
+    try:
+        reader = PdfReader(input_path)
+        if reader.is_encrypted:
+            raise PDFToolError("El archivo está protegido con contraseña. Desprotégelo primero.")
+            
+        writer = PdfWriter()
+        total_pages = len(reader.pages)
+        
+        for page in reader.pages:
+            orig_ll = page.cropbox.lower_left
+            orig_ur = page.cropbox.upper_right
+            
+            new_ll_x = orig_ll[0] + left_pt
+            new_ll_y = orig_ll[1] + bottom_pt
+            new_ur_x = orig_ur[0] - right_pt
+            new_ur_y = orig_ur[1] - top_pt
+            
+            if new_ll_x < new_ur_x and new_ll_y < new_ur_y:
+                page.cropbox.lower_left = (new_ll_x, new_ll_y)
+                page.cropbox.upper_right = (new_ur_x, new_ur_y)
+                
+            writer.add_page(page)
+            
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        with open(output_path, "wb") as f_out:
+            writer.write(f_out)
+            
+        return total_pages
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al recortar márgenes del PDF: {str(e)}")
+
+
+# -----------------------------------------------------------------------------
+# 14. EXCEL (.XLSX/.XLS) A PDF
+# -----------------------------------------------------------------------------
+def convert_excel_to_pdf(excel_path: str, output_path: str) -> None:
+    """Convierte una hoja de cálculo Excel a PDF usando COM nativo en Windows."""
+    if not os.path.exists(excel_path):
+        raise PDFToolError(f"El archivo Excel no existe: {excel_path}")
+        
+    try:
+        import win32com.client
+    except ImportError:
+        raise PDFToolError("El módulo 'pywin32' no está disponible.")
+        
+    excel = None
+    try:
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        
+        wb = excel.Workbooks.Open(os.path.abspath(excel_path))
+        # 0 corresponde a xlTypePDF
+        wb.ExportAsFixedFormat(0, os.path.abspath(output_path))
+        wb.Close(False)
+    except Exception as e:
+        raise PDFToolError(f"Error al convertir Excel a PDF: {str(e)}")
+    finally:
+        if excel:
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+
+
+def convert_excel_batch(
+    excel_paths: List[str],
+    output_dir: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
+) -> List[str]:
+    """Convierte múltiples archivos Excel a PDF en lote."""
+    if not excel_paths:
+        raise PDFToolError("No se seleccionaron archivos Excel para convertir.")
+        
+    converted: List[str] = []
+    total = len(excel_paths)
+    for idx, path in enumerate(excel_paths):
+        if progress_callback:
+            progress_callback(idx + 1, total, path)
+            
+        if output_dir:
+            base_name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
+            out_target = os.path.join(output_dir, base_name)
+        else:
+            out_target = os.path.splitext(path)[0] + ".pdf"
+            
+        convert_excel_to_pdf(path, out_target)
+        converted.append(out_target)
+    return converted
+
+
+# -----------------------------------------------------------------------------
+# 15. POWERPOINT (.PPTX/.PPT) A PDF
+# -----------------------------------------------------------------------------
+def convert_powerpoint_to_pdf(ppt_path: str, output_path: str) -> None:
+    """Convierte una presentación PowerPoint a PDF usando COM nativo en Windows."""
+    if not os.path.exists(ppt_path):
+        raise PDFToolError(f"El archivo de presentación no existe: {ppt_path}")
+        
+    try:
+        import win32com.client
+    except ImportError:
+        raise PDFToolError("El módulo 'pywin32' no está disponible.")
+        
+    ppt_app = None
+    try:
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        ppt_app = win32com.client.DispatchEx("PowerPoint.Application")
+        # 32 corresponde a ppSaveAsPDF
+        presentation = ppt_app.Presentations.Open(os.path.abspath(ppt_path), WithWindow=False)
+        presentation.SaveAs(os.path.abspath(output_path), 32)
+        presentation.Close()
+    except Exception as e:
+        raise PDFToolError(f"Error al convertir PowerPoint a PDF: {str(e)}")
+    finally:
+        if ppt_app:
+            try:
+                ppt_app.Quit()
+            except Exception:
+                pass
+
+
+def convert_powerpoint_batch(
+    ppt_paths: List[str],
+    output_dir: Optional[str] = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
+) -> List[str]:
+    """Convierte múltiples archivos PowerPoint a PDF en lote."""
+    if not ppt_paths:
+        raise PDFToolError("No se seleccionaron archivos PowerPoint para convertir.")
+        
+    converted: List[str] = []
+    total = len(ppt_paths)
+    for idx, path in enumerate(ppt_paths):
+        if progress_callback:
+            progress_callback(idx + 1, total, path)
+            
+        if output_dir:
+            base_name = os.path.splitext(os.path.basename(path))[0] + ".pdf"
+            out_target = os.path.join(output_dir, base_name)
+        else:
+            out_target = os.path.splitext(path)[0] + ".pdf"
+            
+        convert_powerpoint_to_pdf(path, out_target)
+        converted.append(out_target)
+    return converted
+
+
+# -----------------------------------------------------------------------------
+# 16. PDF A WORD (.DOCX)
+# -----------------------------------------------------------------------------
+def convert_pdf_to_word(pdf_path: str, output_path: str) -> int:
+    """
+    Convierte el contenido textual y estructura de un PDF a un documento Word (.docx) editable.
+    Utiliza python-docx y pypdf de forma 100% local.
+    """
+    if not os.path.exists(pdf_path):
+        raise PDFToolError(f"El archivo PDF no existe: {pdf_path}")
+        
+    try:
+        import docx
+        from docx.shared import Pt, Inches
+    except ImportError:
+        raise PDFToolError("La librería 'python-docx' no está instalada.")
+        
+    try:
+        reader = PdfReader(pdf_path)
+        if reader.is_encrypted:
+            raise PDFToolError("El documento está protegido con contraseña. Desprotégelo primero.")
+            
+        doc = docx.Document()
+        total_pages = len(reader.pages)
+        
+        for idx, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            lines = [line.strip() for line in text.split("\n") if line.strip()]
+            
+            for line in lines:
+                doc.add_paragraph(line)
+                
+            if idx < total_pages - 1:
+                doc.add_page_break()
+                
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        doc.save(output_path)
+        return total_pages
+    except PDFToolError:
+        raise
+    except Exception as e:
+        raise PDFToolError(f"Error al convertir PDF a Word: {str(e)}")

@@ -21,12 +21,21 @@ from ui.components.update_dialog import UpdateDialog
 from ui.icons import icon, logo_pixmap
 from ui.theme import C
 from ui.views.compress import CompressView
+from ui.views.crop import CropView
+from ui.views.excel import ExcelView
 from ui.views.home import HomeView
 from ui.views.images import ImagesView
 from ui.views.merge import MergeView
 from ui.views.organize import OrganizeView
+from ui.views.page_numbers import PageNumbersView
+from ui.views.pdf_to_images import PdfToImagesView
+from ui.views.pdf_to_text import PdfToTextView
+from ui.views.pdf_to_word import PdfToWordView
+from ui.views.powerpoint import PowerpointView
+from ui.views.rotate_bulk import RotateBulkView
 from ui.views.security import SecurityView
 from ui.views.split import SplitView
+from ui.views.watermark import WatermarkView
 from ui.views.word import WordView
 
 
@@ -85,31 +94,57 @@ class MainWindow(QMainWindow):
         self.home_view.tool_requested.connect(self.navigate_to_with_files)
         self._add_view("home", self.home_view)
 
-        # 1. Unir
+        # ORGANIZAR
         self.merge_view = MergeView(self)
         self._add_tool_view("merge", self.merge_view)
 
-        # 2. Dividir
         self.split_view = SplitView(self)
         self._add_tool_view("split", self.split_view)
 
-        # 3. Organizar
         self.organize_view = OrganizeView(self)
         self._add_tool_view("organize", self.organize_view)
 
-        # 4. Comprimir
+        self.rotate_bulk_view = RotateBulkView(self)
+        self._add_tool_view("rotate_bulk", self.rotate_bulk_view)
+
+        self.crop_view = CropView(self)
+        self._add_tool_view("crop", self.crop_view)
+
+        # OPTIMIZAR
         self.compress_view = CompressView(self)
         self._add_tool_view("compress", self.compress_view)
 
-        # 5. Imágenes
+        # EDITAR & ESTILO
+        self.watermark_view = WatermarkView(self)
+        self._add_tool_view("watermark", self.watermark_view)
+
+        self.page_numbers_view = PageNumbersView(self)
+        self._add_tool_view("page_numbers", self.page_numbers_view)
+
+        # CONVERTIR A PDF
         self.images_view = ImagesView(self)
         self._add_tool_view("images", self.images_view)
 
-        # 6. Word
         self.word_view = WordView(self)
         self._add_tool_view("word", self.word_view)
 
-        # 7. Seguridad
+        self.excel_view = ExcelView(self)
+        self._add_tool_view("excel", self.excel_view)
+
+        self.powerpoint_view = PowerpointView(self)
+        self._add_tool_view("powerpoint", self.powerpoint_view)
+
+        # CONVERTIR DESDE PDF
+        self.pdf_to_images_view = PdfToImagesView(self)
+        self._add_tool_view("pdf_to_images", self.pdf_to_images_view)
+
+        self.pdf_to_word_view = PdfToWordView(self)
+        self._add_tool_view("pdf_to_word", self.pdf_to_word_view)
+
+        self.pdf_to_text_view = PdfToTextView(self)
+        self._add_tool_view("pdf_to_text", self.pdf_to_text_view)
+
+        # SEGURIDAD
         self.security_view = SecurityView(self)
         self._add_tool_view("security", self.security_view)
 
@@ -199,6 +234,10 @@ class MainWindow(QMainWindow):
         # De lo contrario, redirigir inteligentemente
         if first.endswith((".docx", ".doc")):
             self.navigate_to_with_files("word", files)
+        elif first.endswith((".xlsx", ".xls")):
+            self.navigate_to_with_files("excel", files)
+        elif first.endswith((".pptx", ".ppt")):
+            self.navigate_to_with_files("powerpoint", files)
         elif first.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp")):
             self.navigate_to_with_files("images", files)
         elif first.endswith(".pdf"):

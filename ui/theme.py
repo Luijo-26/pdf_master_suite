@@ -49,13 +49,33 @@ class ToolMeta:
 
 
 TOOLS: List[ToolMeta] = [
+    # ORGANIZAR
     ToolMeta("merge", "Unir PDFs", "Combina varios PDF en uno solo, en el orden que elijas.", "merge", "#7C6CFF", "ORGANIZAR"),
     ToolMeta("split", "Dividir PDF", "Extrae páginas concretas o separa cada página en su propio archivo.", "scissors", "#14B8A6", "ORGANIZAR"),
     ToolMeta("organize", "Organizar páginas", "Reordena, gira y elimina páginas con vista previa en miniatura.", "grid", "#F59E0B", "ORGANIZAR"),
+    ToolMeta("rotate_bulk", "Rotar en bloque", "Gira todas las páginas, solo pares o solo impares a 90° o 180°.", "rotate_bulk", "#8B5CF6", "ORGANIZAR"),
+    ToolMeta("crop", "Recortar PDF", "Ajusta y recorta los márgenes de página de tu documento.", "crop", "#EAB308", "ORGANIZAR"),
+
+    # OPTIMIZAR
     ToolMeta("compress", "Comprimir PDF", "Reduce el peso del archivo manteniendo intacto su contenido.", "shrink", "#10B981", "OPTIMIZAR"),
-    ToolMeta("images", "Imágenes a PDF", "Convierte fotos JPG, PNG, WEBP o BMP en un documento PDF.", "image", "#EC4899", "CONVERTIR"),
-    ToolMeta("word", "Word a PDF", "Convierte uno o varios documentos de Word a PDF por lotes.", "filetext", "#3B82F6", "CONVERTIR"),
-    ToolMeta("security", "Proteger / Desbloquear", "Añade o quita la contraseña de un PDF con cifrado AES.", "shield", "#F0506E", "SEGURIDAD"),
+
+    # EDITAR & ESTILO
+    ToolMeta("watermark", "Marca de agua", "Inserta texto personalizado o una imagen sobre las páginas del PDF.", "stamp", "#F43F5E", "EDITAR"),
+    ToolMeta("page_numbers", "Numerar páginas", "Añade números de página con ubicación, tipografía y formato a medida.", "hash", "#EC4899", "EDITAR"),
+
+    # CONVERTIR A PDF
+    ToolMeta("images", "Imágenes a PDF", "Convierte fotos JPG, PNG, WEBP o BMP en un documento PDF.", "image", "#EC4899", "CONVERTIR A PDF"),
+    ToolMeta("word", "Word a PDF", "Convierte documentos de Word (.docx/.doc) a PDF por lotes.", "filetext", "#3B82F6", "CONVERTIR A PDF"),
+    ToolMeta("excel", "Excel a PDF", "Convierte libros de cálculo de Excel (.xlsx/.xls) a formato PDF.", "excel", "#10B981", "CONVERTIR A PDF"),
+    ToolMeta("powerpoint", "PowerPoint a PDF", "Convierte presentaciones de diapositivas (.pptx/.ppt) a PDF.", "powerpoint", "#F97316", "CONVERTIR A PDF"),
+
+    # CONVERTIR DESDE PDF
+    ToolMeta("pdf_to_images", "PDF a Imágenes", "Extrae las páginas del documento como imágenes JPG o PNG en alta resolución.", "pdf_image", "#06B6D4", "CONVERTIR DESDE PDF"),
+    ToolMeta("pdf_to_word", "PDF a Word", "Convierte el texto y estructura de un PDF a documento Word (.docx).", "filetext", "#2563EB", "CONVERTIR DESDE PDF"),
+    ToolMeta("pdf_to_text", "PDF a Texto (.txt)", "Extrae todo el texto plano legible del documento a un archivo .txt.", "text", "#64748B", "CONVERTIR DESDE PDF"),
+
+    # SEGURIDAD
+    ToolMeta("security", "Proteger / Desbloquear", "Añade o quita la contraseña de un PDF con cifrado bancario AES.", "shield", "#F0506E", "SEGURIDAD"),
 ]
 
 TOOLS_BY_KEY = {t.key: t for t in TOOLS}

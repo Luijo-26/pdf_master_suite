@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">PDF Master Suite</string>
+    <string name="home_title">Herramientas de Documentos</string>
+    <string name="home_subtitle">Gestión local, privada y segura de PDFs</string>
+    <string name="tool_merge">Unir PDFs</string>
+    <string name="tool_merge_desc">Combina múltiples archivos PDF en el orden que desees</string>
+    <string name="tool_split">Dividir PDF</string>
+    <string name="tool_split_desc">Extrae páginas individuales o intervalos específicos</string>
+    <string name="tool_organize">Organizar y Rotar</string>
+    <string name="tool_organize_desc">Vista en miniatura de páginas con rotación y eliminación</string>
+    <string name="tool_compress">Comprimir PDF</string>
+    <string name="tool_compress_desc">Reduce el tamaño optimizando objetos y flujos</string>
+    <string name="tool_images_to_pdf">Imágenes a PDF</string>
+    <string name="tool_images_to_pdf_desc">Convierte fotos JPG, PNG o WEBP en un único documento</string>
+    <string name="tool_security">Seguridad PDF</string>
+    <string name="tool_security_desc">Cifra con contraseña bancaria AES o desbloquea archivos</string>
+</resources>

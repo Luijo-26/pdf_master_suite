@@ -53,6 +53,34 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
    - **Proteger:** Cifrado con contraseña bajo algoritmos bancarios robustos: `AES-256` (máxima seguridad) o `AES-128`. Incluye medidor de fortaleza de contraseña y alternancia de visibilidad.
    - **Desbloquear:** Detección automática del estado del archivo y remoción permanente de la clave tras ingresar la contraseña correcta.
 
+8. **PDF a Imágenes (JPG / PNG):**
+   - Renderizado ultrarrápido y nítido de cada página a imágenes individuales en 100, 150 o 300 DPI mediante `PySide6.QtPdf`.
+   - Selección de formato PNG sin pérdidas o JPG ligero y extracción por rangos de página.
+
+9. **Añadir Marca de Agua (Watermark):**
+   - Estampado de texto personalizado (fuente, tamaño, color, inclinación a -45°/0°/45°/90° y opacidad regulable) o imágenes/logotipos en 9 posiciones de la hoja con `ReportLab`.
+
+10. **Numerar Páginas (Page Numbers):**
+    - Inserción de numeración dinámica ("Página {n} de {total}", "{n}", etc.) con 6 ubicaciones configurables y opción de omitir la portada.
+
+11. **Rotar PDF en Bloque:**
+    - Giro instantáneo de todas las páginas, solo páginas pares o solo impares a +90°, -90° o 180°.
+
+12. **PDF a Texto Plano (.txt):**
+    - Extracción completa de texto estructurado en UTF-8 con opción de delimitadores de página.
+
+13. **Recortar PDF (Crop Margins):**
+    - Ajuste milimétrico de márgenes (Superior, Inferior, Izquierdo, Derecho) para eliminar bordes sobrantes.
+
+14. **Excel a PDF (.xlsx / .xls):**
+    - Conversión local individual o por lotes de hojas de cálculo de Microsoft Excel a PDF.
+
+15. **PowerPoint a PDF (.pptx / .ppt):**
+    - Conversión local por lotes de presentaciones de diapositivas a PDF de alta fidelidad.
+
+16. **PDF a Word (.docx):**
+    - Extracción de contenido estructurado de PDF a documentos Microsoft Word editables de forma local.
+
 ---
 
 ## Atajos de Teclado Globales
@@ -76,19 +104,20 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 ```text
 ├── main.py                  # Arranque de la aplicación y ciclo de vida Qt
 ├── pdf_tools.py             # Lógica pura de manipulación de archivos (sin GUI)
-├── requirements.txt         # Dependencias (PySide6, pypdf, Pillow, docx2pdf, etc.)
+├── requirements.txt         # Dependencias (PySide6, pypdf, Pillow, openpyxl, python-docx, etc.)
 ├── build.bat                # Script de compilación a ejecutable (.exe)
+├── PDFMasterSuite_v2.2.spec # Configuración de PyInstaller para versión 2.2
 ├── core/
-│   ├── version.py           # Metadatos de versión y parser semántico
+│   ├── version.py           # Metadatos de versión y parser semántico (v2.2.0)
 │   └── updater.py           # Comprobación de API GitHub, descarga y hot-swap Windows
 ├── ui/
 │   ├── app.py               # Ventana principal (QMainWindow, router y atajos)
-│   ├── theme.py             # Sistema de diseño, paleta oscura y QSS global
+│   ├── theme.py             # Sistema de diseño, paleta oscura y metadatos de herramientas
 │   ├── icons.py             # Iconos vectoriales SVG embebidos y logotipo
 │   ├── worker.py            # Ejecución en segundo plano con QThreadPool
 │   ├── recents.py           # Gestor de historial de archivos recientes
 │   ├── components/
-│   │   ├── sidebar.py       # Menú lateral categorizado con verificador
+│   │   ├── sidebar.py       # Menú lateral categorizado con buscador en tiempo real
 │   │   ├── update_dialog.py # Diálogo modal emergente de actualización
 │   │   ├── drop_zone.py     # Zona de arrastrar y soltar nativa
 │   │   ├── file_list.py     # Lista de archivos interactiva reordenable
@@ -97,13 +126,22 @@ Aplicación de escritorio nativa para Windows con interfaz gráfica moderna, flu
 │   │   └── toast.py         # Notificaciones flotantes animadas
 │   └── views/
 │       ├── base_tool.py     # Estructura base de herramientas
-│       ├── home.py          # Dashboard de bienvenida
+│       ├── home.py          # Dashboard de bienvenida con búsqueda y acceso rápido
 │       ├── merge.py         # Vista Unir PDFs
 │       ├── split.py         # Vista Dividir PDF
 │       ├── organize.py      # Vista Organizar páginas
+│       ├── rotate_bulk.py   # Vista Rotar PDF en bloque
+│       ├── crop.py          # Vista Recortar PDF
 │       ├── compress.py      # Vista Comprimir PDF
+│       ├── watermark.py     # Vista Marca de agua
+│       ├── page_numbers.py  # Vista Numerar páginas
 │       ├── images.py        # Vista Imágenes a PDF
 │       ├── word.py          # Vista Word a PDF
+│       ├── excel.py         # Vista Excel a PDF
+│       ├── powerpoint.py    # Vista PowerPoint a PDF
+│       ├── pdf_to_images.py # Vista PDF a Imágenes
+│       ├── pdf_to_word.py   # Vista PDF a Word
+│       ├── pdf_to_text.py   # Vista PDF a Texto
 │       └── security.py      # Vista Seguridad de PDF
 └── README.md
 ```

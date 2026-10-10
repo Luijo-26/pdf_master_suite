@@ -145,3 +145,15 @@ class BaseToolView(QWidget):
         if file_path:
             add_recent(file_path, tool_name or self.tool_title)
         self.toast_requested.emit(message, "Completado con éxito", "success", file_path)
+
+    def add_initial_files(self, files: List[str]):
+        """Carga automáticamente archivos en la herramienta activa."""
+        if not files:
+            return
+        if hasattr(self, "_on_file_selected"):
+            self._on_file_selected(files)
+        elif hasattr(self, "_on_files_added"):
+            self._on_files_added(files)
+        elif hasattr(self, "file_list"):
+            self.file_list.add_files(files)
+

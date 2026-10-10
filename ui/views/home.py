@@ -266,6 +266,10 @@ class HomeView(QWidget):
         first = files[0].lower()
         if first.endswith((".docx", ".doc")):
             self.tool_requested.emit("word", files)
+        elif first.endswith((".xlsx", ".xls")):
+            self.tool_requested.emit("excel", files)
+        elif first.endswith((".pptx", ".ppt")):
+            self.tool_requested.emit("powerpoint", files)
         elif first.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp")):
             self.tool_requested.emit("images", files)
         elif first.endswith(".pdf"):

@@ -76,3 +76,15 @@ $RECYCLE.BIN/
 *.pdf_test
 output/
 downloads/
+
+# =============================================================================
+# Android / Gradle (pdf_master_android)
+# =============================================================================
+.gradle/
+.kotlin/
+local.properties
+**/build/
+**/release/
+*.apk
+*.aab
+

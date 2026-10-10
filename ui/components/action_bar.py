@@ -88,6 +88,9 @@ class ActionBar(QFrame):
     def set_enabled(self, enabled: bool):
         self.action_btn.setEnabled(enabled)
 
+    def set_button_enabled(self, enabled: bool):
+        self.action_btn.setEnabled(enabled)
+
     def set_button_text(self, text: str, icon_name: str = "check"):
         self.action_btn.setText(text)
         self.action_btn.setIcon(pixmap(icon_name, 16, "white"))

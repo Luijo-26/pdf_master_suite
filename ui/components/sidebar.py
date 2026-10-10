@@ -4,12 +4,12 @@ Menú lateral de navegación con diseño moderno, categorización clara por obje
 iconos vectoriales temáticos y píldoras de selección activa.
 """
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCursor, QIcon
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
     QVBoxLayout, QWidget
 )
 
@@ -126,7 +126,36 @@ class Sidebar(QFrame):
         header.addLayout(title_col, 1)
         main_layout.addLayout(header)
 
-        # 2. Área de scroll para botones de navegación
+        # 2. Caja de búsqueda rápida de herramientas
+        search_box = QFrame()
+        search_box.setStyleSheet(f"""
+            QFrame {{
+                background: {C.INPUT};
+                border: 1px solid {C.BORDER};
+                border-radius: 8px;
+            }}
+            QFrame:focus-within {{
+                border: 1px solid {C.ACCENT};
+            }}
+        """)
+        s_layout = QHBoxLayout(search_box)
+        s_layout.setContentsMargins(8, 4, 8, 4)
+        s_layout.setSpacing(6)
+
+        s_icon = QLabel()
+        s_icon.setPixmap(pixmap("search", 13, C.TEXT_3))
+        s_layout.addWidget(s_icon)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Buscar herramienta...")
+        self.search_input.setFont(font(9, 400))
+        self.search_input.setStyleSheet("border: none; background: transparent; color: white;")
+        self.search_input.textChanged.connect(self._on_search_changed)
+        s_layout.addWidget(self.search_input, 1)
+
+        main_layout.addWidget(search_box)
+
+        # 3. Área de scroll para botones de navegación
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -136,9 +165,10 @@ class Sidebar(QFrame):
         container.setObjectName("scrollContent")
         c_layout = QVBoxLayout(container)
         c_layout.setContentsMargins(0, 0, 0, 0)
-        c_layout.setSpacing(4)
+        c_layout.setSpacing(3)
 
         self.buttons: Dict[str, NavButton] = {}
+        self.group_items: Dict[str, Tuple[QLabel, List[Tuple[NavButton, ToolMeta]]]] = {}
 
         # Botón Inicio
         self.btn_home = NavButton("home", "Inicio", "home", C.ACCENT, self)
@@ -147,26 +177,35 @@ class Sidebar(QFrame):
         self.buttons["home"] = self.btn_home
 
         # Secciones agrupadas
-        groups = [
-            ("ORGANIZAR", [t for t in TOOLS if t.group == "ORGANIZAR"]),
-            ("OPTIMIZAR", [t for t in TOOLS if t.group == "OPTIMIZAR"]),
-            ("CONVERTIR", [t for t in TOOLS if t.group == "CONVERTIR"]),
-            ("SEGURIDAD", [t for t in TOOLS if t.group == "SEGURIDAD"]),
+        category_order = [
+            "ORGANIZAR",
+            "OPTIMIZAR",
+            "EDITAR",
+            "CONVERTIR A PDF",
+            "CONVERTIR DESDE PDF",
+            "SEGURIDAD",
         ]
 
-        for group_title, tools_list in groups:
-            # Separador / etiqueta de grupo
-            lbl_group = QLabel(group_title)
+        for cat in category_order:
+            tools_in_cat = [t for t in TOOLS if t.group == cat]
+            if not tools_in_cat:
+                continue
+
+            lbl_group = QLabel(cat)
             lbl_group.setProperty("role", "section")
-            lbl_group.setFont(font(8.5, 700))
-            lbl_group.setContentsMargins(8, 14, 0, 4)
+            lbl_group.setFont(font(8, 700))
+            lbl_group.setContentsMargins(8, 12, 0, 4)
             c_layout.addWidget(lbl_group)
 
-            for t in tools_list:
+            cat_buttons: List[Tuple[NavButton, ToolMeta]] = []
+            for t in tools_in_cat:
                 btn = NavButton(t.key, t.title, t.icon, t.color, self)
                 btn.clicked.connect(lambda checked=False, k=t.key: self.navigate_requested.emit(k))
                 c_layout.addWidget(btn)
                 self.buttons[t.key] = btn
+                cat_buttons.append((btn, t))
+
+            self.group_items[cat] = (lbl_group, cat_buttons)
 
         c_layout.addStretch()
         scroll.setWidget(container)
@@ -216,3 +255,27 @@ class Sidebar(QFrame):
         """Marca como activa la herramienta seleccionada y desmarca las demás."""
         for k, btn in self.buttons.items():
             btn.set_active(k == key)
+
+    def _on_search_changed(self, text: str):
+        """Filtra en tiempo real los botones y encabezados de categoría."""
+        query = text.lower().strip()
+        
+        # El botón Home solo se muestra si la búsqueda está vacía o coincide con 'inicio' / 'home'
+        if "home" in self.buttons:
+            self.buttons["home"].setVisible(not query or "inicio" in query or "home" in query)
+
+        for cat, (lbl_group, items) in self.group_items.items():
+            visible_count = 0
+            for btn, meta in items:
+                match = (
+                    not query or
+                    query in meta.title.lower() or
+                    query in meta.description.lower() or
+                    query in meta.key.lower() or
+                    query in cat.lower()
+                )
+                btn.setVisible(match)
+                if match:
+                    visible_count += 1
+            lbl_group.setVisible(visible_count > 0)
+
