@@ -450,7 +450,7 @@ class UpdateDialog(QDialog):
         self.btn_cancel_dl.hide()
 
         # Intentar aplicar actualización
-        success, reason = apply_update_and_restart(temp_filepath)
+        success, reason = apply_update_and_restart(temp_filepath, self.release_info.asset_name)
         if not success:
             if reason == "dev_mode":
                 self.progress_stats.setText(

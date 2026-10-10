@@ -225,7 +225,7 @@ class UpdateDownloadThread(QThread):
             self.error.emit(str(e))
 
 
-def apply_update_and_restart(temp_exe_path: str) -> Tuple[bool, str]:
+def apply_update_and_restart(temp_exe_path: str, new_asset_name: str = "") -> Tuple[bool, str]:
     """
     Aplica la actualización reemplazando el binario actual mediante un script
     de relevo desacoplado en Windows y relanza la aplicación.
@@ -247,33 +247,64 @@ def apply_update_and_restart(temp_exe_path: str) -> Tuple[bool, str]:
     bat_path = os.path.join(tempfile.gettempdir(), f"pms_updater_{os.getpid()}.bat")
     current_pid = os.getpid()
 
+    # Si el nombre del nuevo asset es específico y difiere del actual, preparar copia
+    dest_dir = os.path.dirname(current_exe)
+    new_named_exe = ""
+    if new_asset_name and new_asset_name.lower().endswith(".exe"):
+        target_candidate = os.path.join(dest_dir, new_asset_name)
+        if os.path.normpath(target_candidate).lower() != os.path.normpath(current_exe).lower():
+            new_named_exe = target_candidate
+
     bat_content = f"""@echo off
 chcp 65001 > nul
 set "TARGET_PID={current_pid}"
 set "NEW_EXE={temp_exe_path}"
 set "DEST_EXE={current_exe}"
+set "NEW_NAMED_EXE={new_named_exe}"
 
-:: Esperar a que el proceso anterior finalice completamente
+:: 1. Esperar a que el proceso anterior finalice completamente (maximo 15 segundos)
+set WAIT_COUNT=0
 :wait_loop
-tasklist /fi "PID eq %TARGET_PID%" | findstr /i "%TARGET_PID%" > nul
-if %errorlevel% equ 0 (
-    timeout /t 1 /nobreak > nul
-    goto wait_loop
+tasklist /fi "PID eq %TARGET_PID%" 2>nul | findstr /i "%TARGET_PID%" > nul
+if %errorlevel% neq 0 goto process_dead
+set /a WAIT_COUNT+=1
+if %WAIT_COUNT% geq 15 goto process_dead
+ping 127.0.0.1 -n 2 > nul
+goto wait_loop
+
+:process_dead
+:: Pausa de seguridad para que el sistema de archivos libere los handles del ejecutable
+ping 127.0.0.1 -n 2 > nul
+
+:: 2. Reemplazar el binario existente por el nuevo con reintentos (hasta 20 segundos)
+set RETRY_COUNT=0
+:copy_loop
+copy /y /b "%NEW_EXE%" "%DEST_EXE%" > nul 2>&1
+if %errorlevel% equ 0 goto copy_success
+set /a RETRY_COUNT+=1
+if %RETRY_COUNT% geq 20 goto copy_failed
+ping 127.0.0.1 -n 2 > nul
+goto copy_loop
+
+:copy_success
+:: Si habia un nombre nuevo sugerido, copiar tambien alli
+if defined NEW_NAMED_EXE (
+    copy /y /b "%NEW_EXE%" "%NEW_NAMED_EXE%" > nul 2>&1
 )
 
-:: Reemplazar el binario existente por el nuevo
-copy /y /b "%NEW_EXE%" "%DEST_EXE%" > nul
-if %errorlevel% neq 0 (
-    :: Reintento en caso de demora del sistema de archivos
-    timeout /t 1 /nobreak > nul
-    copy /y /b "%NEW_EXE%" "%DEST_EXE%" > nul
-)
-
-:: Relanzar la aplicación actualizada
+:: 3. Relanzar la aplicacion actualizada
 start "" "%DEST_EXE%"
 
-:: Limpieza de temporales y autoeliminación del script
-del "%NEW_EXE%" > nul 2>&1
+:: Limpieza de archivo temporal descargado
+del /f /q "%NEW_EXE%" > nul 2>&1
+goto self_delete
+
+:copy_failed
+:: Fallback: si no se pudo sobrescribir, intentar ejecutar el nuevo binario directamente
+start "" "%NEW_EXE%"
+
+:self_delete
+:: Autoeliminacion del script batch
 (goto) 2>nul & del "%~f0"
 """
 
@@ -281,13 +312,10 @@ del "%NEW_EXE%" > nul 2>&1
         with open(bat_path, "w", encoding="utf-8") as f:
             f.write(bat_content)
 
-        # Lanzar el proceso desacoplado en Windows
+        # Lanzar el proceso de reemplazo completamente oculto sin ventana negra de consola
         creation_flags = 0
         if os.name == "nt":
-            creation_flags = (
-                getattr(subprocess, "DETACHED_PROCESS", 0) |
-                getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            )
+            creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
         subprocess.Popen(
             ["cmd.exe", "/c", bat_path],
@@ -295,8 +323,16 @@ del "%NEW_EXE%" > nul 2>&1
             close_fds=True,
         )
 
-        # Cerrar la aplicación actual de forma ordenada
-        QApplication.quit()
+        # Cerrar de forma forzosa e inmediata el proceso de la aplicacion para liberar
+        # el bloqueo de archivo del binario ejecutable en Windows.
+        # os._exit garantiza que no quede bloqueado en dialog.exec() o en hilos de fondo.
+        try:
+            QApplication.closeAllWindows()
+            QApplication.quit()
+        except Exception:
+            pass
+
+        os._exit(0)
         return (True, "")
     except Exception as e:
         return (False, f"Error al iniciar el asistente de reemplazo: {e}")
